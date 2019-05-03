@@ -1,0 +1,3 @@
+[submodule "3rd_party/RevilLib"]
+	path = 3rd_party/RevilLib
+	url = https://github.com/PredatorCZ/RevilLib.git
