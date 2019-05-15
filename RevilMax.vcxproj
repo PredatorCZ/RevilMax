@@ -140,7 +140,7 @@
       <OutputFile>$(OutDir)$(TargetName).dlu</OutputFile>
     </Link>
     <PostBuildEvent>
-      <Command>COPY /Y /V "$(OutDir)$(TargetName).dlu" /B "C:\Program Files\Autodesk\3ds Max $(Configuration)\Plugins\" /B</Command>
+      <Command>COPY /Y /V "$(OutDir)$(TargetName).dlu" /B "$(LocalDebuggerWorkingDirectory)Plugins\" /B</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

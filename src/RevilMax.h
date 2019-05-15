@@ -35,6 +35,9 @@
 extern TCHAR *GetString(int id);
 extern HINSTANCE hInstance;
 
+#define REVILMAXVERSION "1.1"
+#define REVILMAXVERSIONINT 110
+
 static const Matrix3 corMat =
 {
 	{1.0f, 0.0f, 0.0f},

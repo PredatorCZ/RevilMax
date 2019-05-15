@@ -124,7 +124,7 @@ const TCHAR *REEngineImport::OtherMessage2()
 
 unsigned int REEngineImport::Version()
 {				
-	return 100;
+	return REVILMAXVERSIONINT;
 }
 
 void REEngineImport::ShowAbout(HWND hWnd)
@@ -187,8 +187,8 @@ void REEngineImport::LoadMotion(REMotion &mot, TimeValue startTime)
 		hashedNodes[cBone.boneHash] = node;
 	}
 
-	GetCOREInterface()->SetAnimRange(Interval(startTime, (mot.intervals[0] * mot.framesPerSecond) + startTime));
 	SetFrameRate(mot.framesPerSecond);
+	GetCOREInterface()->SetAnimRange(Interval(startTime, (mot.intervals[0] * GetTicksPerFrame()) + startTime));
 
 	for (int t = 0; t < numTracks; t++)
 	{
@@ -215,7 +215,7 @@ void REEngineImport::LoadMotion(REMotion &mot, TimeValue startTime)
 
 				for (int f = 0; f < curve.numFrames; f++)
 				{
-					TimeValue atTime = startTime + tController->GetFrame(f) * curve.framesPerSecond;
+					TimeValue atTime = startTime + tController->GetFrame(f) * GetTicksPerFrame();
 
 					Vector4 cVal;
 					tController->Evaluate(f, cVal);
@@ -246,7 +246,7 @@ void REEngineImport::LoadMotion(REMotion &mot, TimeValue startTime)
 				kCon->SetNumKeys(curve.numFrames);
 				for (int f = 0; f < curve.numFrames; f++)
 				{
-					TimeValue atTime = startTime + tController->GetFrame(f) * curve.framesPerSecond;
+					TimeValue atTime = startTime + tController->GetFrame(f) * GetTicksPerFrame();
 
 					Vector4 cVal;
 					tController->Evaluate(f, cVal);
@@ -284,7 +284,7 @@ void REEngineImport::LoadMotion(REMotion &mot, TimeValue startTime)
 
 				for (int f = 0; f < curve.numFrames; f++)
 				{
-					TimeValue atTime = startTime + tController->GetFrame(f) * curve.framesPerSecond;
+					TimeValue atTime = startTime + tController->GetFrame(f) * GetTicksPerFrame();
 
 					Vector4 cVal;
 					tController->Evaluate(f, cVal);

@@ -30,7 +30,7 @@
 extern HINSTANCE hInstance;
 
 const TCHAR _name[] = _T("Revil Tool");
-const TCHAR _info[] = _T("\nCopyright (C) 2019 Lukas Cone\nVersion 1");
+const TCHAR _info[] = _T("\nCopyright (C) 2019 Lukas Cone\nVersion " REVILMAXVERSION);
 const TCHAR _license[] = _T("Revil Tool uses RevilLib, Copyright(C) 2017-2019 Lukas Cone.");
 const TCHAR _homePage[] = _T("https://lukascone.wordpress.com/2019/05/02/revil-3ds-max-plugin/");
 
@@ -79,7 +79,7 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam, 
 		imp->comboHandle = GetDlgItem(hWnd, IDC_CB_MOTION);
 		imp->LoadCFG();
 		SetupIntSpinner(hWnd, IDC_SPIN_SCALE, IDC_EDIT_SCALE, 0, 5000, imp->IDC_EDIT_SCALE_value);
-		SetWindowText(hWnd, _T("RE Engine Motion Import v1"));
+		SetWindowText(hWnd, _T("RE Engine Motion Import v" REVILMAXVERSION));
 
 		if (imp->motionNames.size())
 		{
