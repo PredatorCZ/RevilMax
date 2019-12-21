@@ -34,5 +34,8 @@
 *.app
 *.vs/*
 *.aps
-*ObjDump*
+build/*
 *Bin/*
+project.h
+.vscode/*
+*.7z

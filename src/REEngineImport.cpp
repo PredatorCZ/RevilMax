@@ -1,363 +1,357 @@
-/*	Revil Tool for 3ds Max
-	Copyright(C) 2019 Lukas Cone
+/*  Revil Tool for 3ds Max
+    Copyright(C) 2019-2020 Lukas Cone
 
-	This program is free software : you can redistribute it and / or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
+    This program is free software : you can redistribute it and / or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
-	GNU General Public License for more details.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+    GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
-	along with this program.If not, see <https://www.gnu.org/licenses/>.
+    You should have received a copy of the GNU General Public License
+    along with this program.If not, see <https://www.gnu.org/licenses/>.
 
-	Revil Tool uses RevilLib 2017-2019 Lukas Cone
+    Revil Tool uses RevilLib 2017-2020 Lukas Cone
 */
 
-#include <map>
 #include "RevilMax.h"
 #include "datas/esstring.h"
-#include "REAsset.h"
 #include "datas/masterprinter.hpp"
+#include "re_asset.hpp"
+#include "uni_motion.hpp"
+#include "uni_skeleton.hpp"
+#include <memory>
+#include <unordered_map>
 
-#define REEngineImport_CLASS_ID	Class_ID(0x373d264a, 0x90c37b7)
+#define REEngineImport_CLASS_ID Class_ID(0x373d264a, 0x90c37b7)
 static const TCHAR _className[] = _T("REEngineImport");
 
-class REEngineImport : public SceneImport, RevilMax
-{
+class REEngineImport : public SceneImport, RevilMax {
 public:
-	//Constructor/Destructor
-	REEngineImport();
-	virtual ~REEngineImport() {}
+  // Constructor/Destructor
+  REEngineImport();
+  virtual ~REEngineImport() {}
 
-	virtual int				ExtCount();					// Number of extensions supported
-	virtual const TCHAR *	Ext(int n);					// Extension #n (i.e. "3DS")
-	virtual const TCHAR *	LongDesc();					// Long ASCII description (i.e. "Autodesk 3D Studio File")
-	virtual const TCHAR *	ShortDesc();				// Short ASCII description (i.e. "3D Studio")
-	virtual const TCHAR *	AuthorName();				// ASCII Author name
-	virtual const TCHAR *	CopyrightMessage();			// ASCII Copyright message
-	virtual const TCHAR *	OtherMessage1();			// Other message #1
-	virtual const TCHAR *	OtherMessage2();			// Other message #2
-	virtual unsigned int	Version();					// Version number * 100 (i.e. v3.01 = 301)
-	virtual void			ShowAbout(HWND hWnd);		// Show DLL's "About..." box
-	virtual int				DoImport(const TCHAR *name,ImpInterface *i,Interface *gi, BOOL suppressPrompts=FALSE);	// Import file
+  virtual int ExtCount();          // Number of extensions supported
+  virtual const TCHAR *Ext(int n); // Extension #n (i.e. "3DS")
+  virtual const TCHAR *
+  LongDesc(); // Long ASCII description (i.e. "Autodesk 3D Studio File")
+  virtual const TCHAR *
+  ShortDesc(); // Short ASCII description (i.e. "3D Studio")
+  virtual const TCHAR *AuthorName();       // ASCII Author name
+  virtual const TCHAR *CopyrightMessage(); // ASCII Copyright message
+  virtual const TCHAR *OtherMessage1();    // Other message #1
+  virtual const TCHAR *OtherMessage2();    // Other message #2
+  virtual unsigned int Version();    // Version number * 100 (i.e. v3.01 = 301)
+  virtual void ShowAbout(HWND hWnd); // Show DLL's "About..." box
+  virtual int DoImport(const TCHAR *name, ImpInterface *i, Interface *gi,
+                       BOOL suppressPrompts = FALSE); // Import file
 
-	void LoadMotion(REMotion &mot, TimeValue startTime = 0);
+  std::unordered_map<uint, INode *> nodes;
+
+  void LoadSkeleton(uni::Skeleton *skel, TimeValue startTime = 0);
+  TimeValue LoadMotion(uni::Motion *mot, TimeValue startTime = 0);
 };
 
-class : public ClassDesc2 
-{
+class : public ClassDesc2 {
 public:
-	virtual int				IsPublic() 		{ return TRUE; }
-	virtual void *			Create(BOOL) 	{ return new REEngineImport(); }
-	virtual const TCHAR *	ClassName() 	{ return _className; }
-	virtual SClass_ID		SuperClassID() 	{ return SCENE_IMPORT_CLASS_ID; }
-	virtual Class_ID		ClassID() 		{ return REEngineImport_CLASS_ID; }
-	virtual const TCHAR *	Category() 		{ return NULL; }
-	virtual const TCHAR *	InternalName() 	{ return _className; }
-	virtual HINSTANCE		HInstance() 	{ return hInstance; }
-}REEngineImportDesc;
+  virtual int IsPublic() { return TRUE; }
+  virtual void *Create(BOOL) { return new REEngineImport(); }
+  virtual const TCHAR *ClassName() { return _className; }
+  virtual SClass_ID SuperClassID() { return SCENE_IMPORT_CLASS_ID; }
+  virtual Class_ID ClassID() { return REEngineImport_CLASS_ID; }
+  virtual const TCHAR *Category() { return NULL; }
+  virtual const TCHAR *InternalName() { return _className; }
+  virtual HINSTANCE HInstance() { return hInstance; }
+} REEngineImportDesc;
 
-ClassDesc2* GetREEngineImportDesc() { return &REEngineImportDesc; }
+ClassDesc2 *GetREEngineImportDesc() { return &REEngineImportDesc; }
 
 //--- HavokImp -------------------------------------------------------
-REEngineImport::REEngineImport()
-{
+REEngineImport::REEngineImport() {}
+
+int REEngineImport::ExtCount() { return 6; }
+
+const TCHAR *REEngineImport::Ext(int n) {
+  switch (n) {
+  case 0:
+    return _T("motlist.85");
+  case 1:
+    return _T("motlist");
+  case 2:
+    return _T("mot.65");
+  case 3:
+    return _T("mot");
+  case 4:
+    return _T("motlist.99");
+  case 5:
+    return _T("mot.78");
+  default:
+    return nullptr;
+  }
+
+  return nullptr;
 }
 
-int REEngineImport::ExtCount()
-{
-	return 4;
+const TCHAR *REEngineImport::LongDesc() { return _T("RE Engine Import"); }
+
+const TCHAR *REEngineImport::ShortDesc() { return _T("RE Engine Import"); }
+
+const TCHAR *REEngineImport::AuthorName() { return _T(RevilMax_AUTHOR); }
+
+const TCHAR *REEngineImport::CopyrightMessage() {
+  return _T(RevilMax_COPYRIGHT);
 }
 
-const TCHAR *REEngineImport::Ext(int n)
-{
-	switch (n)
-	{
-	case 0:
-		return _T("motlist.85");
-	case 1:
-		return _T("motlist");
-	case 2:
-		return _T("mot.65");
-	case 3:
-		return _T("mot");
-	default:
-		return nullptr;
-	}
+const TCHAR *REEngineImport::OtherMessage1() { return _T(""); }
 
-	return nullptr;
+const TCHAR *REEngineImport::OtherMessage2() { return _T(""); }
+
+unsigned int REEngineImport::Version() { return REVILMAX_VERSIONINT; }
+
+void REEngineImport::ShowAbout(HWND hWnd) { ShowAboutDLG(hWnd); }
+
+void REEngineImport::LoadSkeleton(uni::Skeleton *skel, TimeValue startTime) {
+  for (auto &b : *skel) {
+    TSTRING boneName = esStringConvert<TCHAR>(b.Name().c_str());
+    INode *node = GetCOREInterface()->GetINodeByName(boneName.c_str());
+
+    if (!node) {
+      Object *obj = static_cast<Object *>(
+          CreateInstance(HELPER_CLASS_ID, Class_ID(DUMMY_CLASS_ID, 0)));
+      node = GetCOREInterface()->CreateObjectNode(obj);
+      node->ShowBone(2);
+      node->SetWireColor(0x80ff);
+      node->SetName(ToBoneName(boneName));
+    }
+
+    auto boneTM = b.Transform();
+    boneTM.Transpose();
+
+    Matrix3 nodeTM = {
+        reinterpret_cast<const Point3 &>(boneTM.r1),
+        reinterpret_cast<const Point3 &>(boneTM.r2),
+        reinterpret_cast<const Point3 &>(boneTM.r3),
+        reinterpret_cast<const Point3 &>(boneTM.r4 * IDC_EDIT_SCALE_value),
+    };
+
+    auto parentBone = b.Parent();
+
+    if (parentBone) {
+      INode *pNode = nodes[parentBone->Index()];
+
+      pNode->AttachChild(node);
+      nodeTM *= pNode->GetNodeTM(startTime);
+    } else {
+      nodeTM *= corMat;
+    }
+
+    Control *cnt = node->GetTMController();
+
+    if (cnt->GetPositionController()->ClassID() !=
+        Class_ID(LININTERP_POSITION_CLASS_ID, 0))
+      cnt->SetPositionController((Control *)CreateInstance(
+          CTRL_POSITION_CLASS_ID, Class_ID(LININTERP_POSITION_CLASS_ID, 0)));
+
+    if (cnt->GetRotationController()->ClassID() !=
+        Class_ID(LININTERP_ROTATION_CLASS_ID, 0))
+      cnt->SetRotationController((Control *)CreateInstance(
+          CTRL_ROTATION_CLASS_ID, Class_ID(LININTERP_ROTATION_CLASS_ID, 0)));
+
+    if (cnt->GetScaleController()->ClassID() !=
+        Class_ID(LININTERP_SCALE_CLASS_ID, 0))
+      cnt->SetScaleController((Control *)CreateInstance(
+          CTRL_SCALE_CLASS_ID, Class_ID(LININTERP_SCALE_CLASS_ID, 0)));
+    AnimateOn();
+    node->SetNodeTM(startTime, nodeTM);
+    AnimateOff();
+    node->SetUserPropString(_T("BoneHash"), ToTSTRING(b.Index()).c_str());
+    nodes[b.Index()] = node;
+  }
 }
 
-const TCHAR *REEngineImport::LongDesc()
-{
-	return _T("RE Engine Import");
+TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
+  if (!flags[IDC_CH_RESAMPLE_checked])
+    SetFrameRate(mot->FrameRate());
+
+  const float aDuration = mot->Duration();
+  TimeValue numTicks = SecToTicks(aDuration);
+  TimeValue ticksPerFrame = GetTicksPerFrame();
+  TimeValue overlappingTicks = numTicks % ticksPerFrame;
+
+  if (overlappingTicks > (ticksPerFrame / 2))
+    numTicks += ticksPerFrame - overlappingTicks;
+  else
+    numTicks -= overlappingTicks;
+
+  Interval aniRange(startTime, startTime + numTicks - ticksPerFrame);
+  GetCOREInterface()->SetAnimRange(aniRange);
+  std::vector<float> frameTimes;
+  std::vector<TimeValue> frameTimesTicks;
+
+  for (TimeValue v = aniRange.Start(); v <= aniRange.End();
+       v += GetTicksPerFrame()) {
+    frameTimes.push_back(TicksToSec(v - startTime));
+    frameTimesTicks.push_back(v);
+  }
+
+  size_t numFrames = frameTimes.size();
+
+  for (auto &t : *mot) {
+    if (!nodes.count(t.Index()))
+      continue;
+
+    INode *node = nodes[t.Index()];
+    Control *cnt = node->GetTMController();
+
+    for (auto &v : t) {
+      switch (v.CurveType()) {
+      case uni::MotionCurve::Position: {
+        Control *posControl = cnt->GetPositionController();
+
+        AnimateOn();
+
+        for (int i = 0; i < numFrames; i++) {
+          Vector4A16 cVal;
+          v.GetValue(cVal, frameTimes[i]);
+          cVal *= IDC_EDIT_SCALE_value;
+          Point3 kVal = reinterpret_cast<Point3 &>(cVal);
+
+          if (node->GetParentNode()->IsRootNode())
+            kVal = corMat.PointTransform(kVal);
+
+          posControl->SetValue(frameTimesTicks[i], &kVal);
+        }
+
+        AnimateOff();
+        break;
+      }
+
+      case uni::MotionCurve::Rotation: {
+        Control *rotControl = cnt->GetRotationController();
+
+        AnimateOn();
+
+        for (int i = 0; i < numFrames; i++) {
+          Vector4A16 cVal;
+          v.GetValue(cVal, frameTimes[i]);
+          Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
+
+          if (node->GetParentNode()->IsRootNode()) {
+            Matrix3 cMat;
+            cMat.SetRotate(kVal);
+            kVal = cMat * corMat;
+          }
+
+          rotControl->SetValue(frameTimesTicks[i], &kVal);
+        }
+
+        AnimateOff();
+        break;
+      }
+
+      case uni::MotionCurve::Scale: {
+        Control *sclControl = cnt->GetScaleController();
+
+        AnimateOn();
+
+        for (int i = 0; i < numFrames; i++) {
+          Vector4A16 cVal;
+          v.GetValue(cVal, frameTimes[i]);
+          Point3 kVal = reinterpret_cast<Point3 &>(cVal);
+
+          if (node->GetParentNode()->IsRootNode())
+            kVal = corMat.PointTransform(kVal);
+
+          sclControl->SetValue(frameTimesTicks[i], &kVal);
+        }
+
+        AnimateOff();
+        break;
+      }
+
+      default:
+        break;
+      }
+    }
+  }
+
+  return aniRange.End() + ticksPerFrame;
 }
 
-const TCHAR *REEngineImport::ShortDesc()
-{
-	return _T("RE Engine Import");
+int REEngineImport::DoImport(const TCHAR *fileName,
+                             ImpInterface * /*importerInt*/, Interface * /*ip*/,
+                             BOOL suppressPrompts) {
+  char *oldLocale = setlocale(LC_NUMERIC, NULL);
+  setlocale(LC_NUMERIC, "en-US");
+
+  std::string _filename = esStringConvert<char>(fileName);
+  std::unique_ptr<REAsset> mainAsset(REAsset::Load(_filename.c_str()));
+
+  if (!mainAsset)
+    return FALSE;
+
+  uni::List<uni::Motion> *motionList =
+      dynamic_cast<decltype(motionList)>(mainAsset.get());
+  uni::List<uni::Skeleton> *skelList =
+      dynamic_cast<decltype(skelList)>(mainAsset.get());
+  uni::Motion *cMotion = nullptr;
+  uni::Skeleton *skel = skelList->Size() == 1 ? skelList->At(0) : nullptr;
+
+  if (motionList) {
+    for (auto &m : *motionList) {
+      motionNames.emplace_back(esStringConvert<TCHAR>(m.Name().c_str()));
+    }
+
+    if (!suppressPrompts)
+      if (!SpawnDialog())
+        return TRUE;
+
+    if (flags[IDC_RD_ANISEL_checked]) {
+      cMotion = motionList->At(IDC_CB_MOTION_index);
+
+      if (!skel) {
+        skel = skelList->At(IDC_CB_MOTION_index);
+      }
+    } else {
+      TimeValue lastTime = 0;
+      int i = 0;
+
+      printline("Sequencer not found, dumping animation ranges:");
+
+      for (auto &m : *motionList) {
+        uni::Skeleton *_skel = skel ? skel : skelList->At(i);
+
+        LoadSkeleton(_skel, lastTime);
+        TimeValue nextTime = LoadMotion(&m, lastTime);
+        printer << motionNames[i] << ": " << lastTime << ", " << nextTime >> 1;
+        lastTime = nextTime;
+        i++;
+      }
+
+      setlocale(LC_NUMERIC, oldLocale);
+      return TRUE;
+    }
+  }
+
+  if (!cMotion) {
+    cMotion = dynamic_cast<uni::Motion *>(mainAsset.get());
+  }
+
+  if (!cMotion) {
+    MessageBox(GetActiveWindow(),
+               _T("Could't find any defined classes within file."),
+               _T("Undefined file."), MB_ICONSTOP);
+    return TRUE;
+  }
+
+  LoadSkeleton(skel);
+  LoadMotion(cMotion);
+
+  setlocale(LC_NUMERIC, oldLocale);
+
+  return TRUE;
 }
-
-const TCHAR *REEngineImport::AuthorName()
-{
-	return _T("Lukas Cone");
-}
-
-const TCHAR *REEngineImport::CopyrightMessage()
-{
-	return _T("Copyright (C) 2019 Lukas Cone");
-}
-
-const TCHAR *REEngineImport::OtherMessage1()
-{		
-	return _T("");
-}
-
-const TCHAR *REEngineImport::OtherMessage2()
-{		
-	return _T("");
-}
-
-unsigned int REEngineImport::Version()
-{				
-	return REVILMAXVERSIONINT;
-}
-
-void REEngineImport::ShowAbout(HWND hWnd)
-{
-	ShowAboutDLG(hWnd);
-}
-
-void REEngineImport::LoadMotion(REMotion &mot, TimeValue startTime)
-{
-	const int numBones = mot.numBones;
-	const int numTracks = mot.numTracks;
-
-	std::map<int, INode *> hashedNodes;
-
-	for (int b = 0; b < numBones; b++)
-	{
-		REMotionBone &cBone = mot.bones->ptr[b];
-		TSTRING boneName = esString(reinterpret_cast<wchar_t*>(cBone.boneName.ptr));
-		INode *node = GetCOREInterface()->GetINodeByName(boneName.c_str());
-
-		if (!node)
-		{
-			Object *obj = static_cast<Object *>(CreateInstance(HELPER_CLASS_ID, Class_ID(DUMMY_CLASS_ID, 0)));
-			node = GetCOREInterface()->CreateObjectNode(obj);
-			node->ShowBone(2);
-			node->SetWireColor(0x80ff);
-			node->SetName(ToBoneName(boneName));
-		}
-
-		Matrix3 nodeTM = {};
-		nodeTM.SetRotate(reinterpret_cast<const Quat &>(cBone.rotation).Conjugate());
-		nodeTM.SetTrans(reinterpret_cast<const Point3 &>(cBone.position) * IDC_EDIT_SCALE_value);
-
-		if (cBone.parentBoneNamePtr.ptr)
-		{
-			INode *pNode = GetCOREInterface()->GetINodeByName(esStringConvert<TCHAR>(reinterpret_cast<wchar_t *>(*cBone.parentBoneNamePtr.ptr)).c_str());
-
-			if (pNode)
-			{
-				pNode->AttachChild(node);
-				nodeTM *= pNode->GetNodeTM(0);
-			}
-		}
-		else
-			nodeTM *= corMat;
-
-		Control *cnt = node->GetTMController();
-
-		if (cnt->GetPositionController()->ClassID() != Class_ID(LININTERP_POSITION_CLASS_ID, 0))
-			cnt->SetPositionController((Control *)CreateInstance(CTRL_POSITION_CLASS_ID, Class_ID(LININTERP_POSITION_CLASS_ID, 0)));
-
-		if (cnt->GetRotationController()->ClassID() != Class_ID(LININTERP_ROTATION_CLASS_ID, 0))
-			cnt->SetRotationController((Control *)CreateInstance(CTRL_ROTATION_CLASS_ID, Class_ID(LININTERP_ROTATION_CLASS_ID, 0)));
-
-		if (cnt->GetScaleController()->ClassID() != Class_ID(LININTERP_SCALE_CLASS_ID, 0))
-			cnt->SetScaleController((Control *)CreateInstance(CTRL_SCALE_CLASS_ID, Class_ID(LININTERP_SCALE_CLASS_ID, 0)));
-
-		node->SetNodeTM(startTime, nodeTM);
-		node->SetUserPropString(_T("BoneHash"), ToTSTRING(cBone.boneHash).c_str());
-		hashedNodes[cBone.boneHash] = node;
-	}
-
-	SetFrameRate(mot.framesPerSecond);
-	GetCOREInterface()->SetAnimRange(Interval(startTime, (mot.intervals[0] * GetTicksPerFrame()) + startTime));
-
-	for (int t = 0; t < numTracks; t++)
-	{
-		REMotionTrack &cTrack = mot.tracks[t];
-
-		if (!hashedNodes.count(cTrack.boneHash))
-			continue;
-
-		INode *cNode = hashedNodes.at(cTrack.boneHash);
-		Control *cnt = cNode->GetTMController();
-
-		int currentCurve = 0;
-
-		if (cTrack.usedCurves[REMotionTrack::TrackType_Position])
-		{
-			RETrackCurve &curve = cTrack.curves[currentCurve++];
-			RETrackController *tController = curve.GetController();
-			Control *posControl = cnt->GetPositionController();
-			IKeyControl *kCon = GetKeyControlInterface(posControl);
-
-			if (tController)
-			{
-				kCon->SetNumKeys(curve.numFrames);
-
-				for (int f = 0; f < curve.numFrames; f++)
-				{
-					TimeValue atTime = startTime + tController->GetFrame(f) * GetTicksPerFrame();
-
-					Vector4 cVal;
-					tController->Evaluate(f, cVal);
-					
-					ILinPoint3Key cKey;
-					cKey.time = atTime;
-					cKey.val = reinterpret_cast<Point3 &>(cVal) * IDC_EDIT_SCALE_value;
-
-					if (cNode->GetParentNode()->IsRootNode())
-						cKey.val = corMat.PointTransform(cKey.val);
-
-					kCon->SetKey(f, &cKey);
-				}
-
-				delete tController;
-			}
-		}
-
-		if (cTrack.usedCurves[REMotionTrack::TrackType_Rotation])
-		{
-			RETrackCurve &curve = cTrack.curves[currentCurve++];
-			RETrackController *tController = curve.GetController();
-			Control *rotateControl = (Control *)CreateInstance(CTRL_ROTATION_CLASS_ID, Class_ID(HYBRIDINTERP_ROTATION_CLASS_ID, 0));
-			IKeyControl *kCon = GetKeyControlInterface(rotateControl);
-
-			if (tController)
-			{
-				kCon->SetNumKeys(curve.numFrames);
-				for (int f = 0; f < curve.numFrames; f++)
-				{
-					TimeValue atTime = startTime + tController->GetFrame(f) * GetTicksPerFrame();
-
-					Vector4 cVal;
-					tController->Evaluate(f, cVal);
-
-					ILinRotKey cKey;
-					cKey.time = atTime;
-					cKey.val = reinterpret_cast<Quat &>(cVal).Conjugate();
-
-					if (cNode->GetParentNode()->IsRootNode())
-					{
-						Matrix3 cMat;
-						cMat.SetRotate(cKey.val);
-						cKey.val = cMat * corMat;
-					}					
-
-					kCon->SetKey(f, &cKey);
-				}
-
-				delete tController;
-			}
-
-			cnt->GetRotationController()->Copy(rotateControl); //Gimbal fix
-		}
-
-		if (cTrack.usedCurves[REMotionTrack::TrackType_Scale])
-		{
-			RETrackCurve &curve = cTrack.curves[currentCurve++];
-			RETrackController *tController = curve.GetController();
-			Control *scaleControl = cnt->GetScaleController();
-			IKeyControl *kCon = GetKeyControlInterface(scaleControl);
-
-			if (tController)
-			{
-				kCon->SetNumKeys(curve.numFrames);
-
-				for (int f = 0; f < curve.numFrames; f++)
-				{
-					TimeValue atTime = startTime + tController->GetFrame(f) * GetTicksPerFrame();
-
-					Vector4 cVal;
-					tController->Evaluate(f, cVal);
-
-					ILinPoint3Key cKey;
-					cKey.time = atTime;
-					cKey.val = reinterpret_cast<Point3 &>(cVal);
-
-					if (cNode->GetParentNode()->IsRootNode())
-						cKey.val = corMat.PointTransform(cKey.val);
-
-					kCon->SetKey(f, &cKey);
-				}
-
-				delete tController;
-			}
-		}
-	}
-}
-
-int REEngineImport::DoImport(const TCHAR*fileName, ImpInterface* /*importerInt*/, Interface* /*ip*/, BOOL suppressPrompts)
-{
-	char *oldLocale = setlocale(LC_NUMERIC, NULL);
-	setlocale(LC_NUMERIC, "en-US");
-
-	TSTRING _filename = fileName;
-	REAsset mainAsset;
-
-	if (mainAsset.Load(fileName))
-		return FALSE;
-
-	if (mainAsset.IsObject<REMotlist>())
-	{
-		REMotlist *mlst = mainAsset.Object<REMotlist>();
-
-		if (mlst->numMotions > 1)
-			for (int m = 0; m < mlst->numMotions; m++)
-			{
-				REMotion *cMot = static_cast<REMotion *>(mlst->motions[m].ptr);
-				if (cMot)
-					motionNames.push_back(esStringConvert<TCHAR>(reinterpret_cast<wchar_t *>(cMot->animationName.ptr)));
-				else
-					motionNames.push_back(_T("--[Error Type]--"));
-			}
-
-		if (!suppressPrompts)
-			if (!SpawnDialog())
-				return TRUE;
-
-		REMotion *mot = static_cast<REMotion *>(mlst->motions[IDC_CB_MOTION_index].ptr);
-
-		if (!mot)
-			return FALSE;
-
-		LoadMotion(*mot);
-
-	}
-	else if (mainAsset.IsObject<REMotion>())
-	{
-		if (!suppressPrompts)
-			if (!SpawnDialog())
-				return TRUE;
-
-		LoadMotion(*mainAsset.Object<REMotion>());
-	}
-	else
-	{
-		MessageBox(GetActiveWindow(), _T("Could't find any defined classes within file."), _T("Undefined file."), MB_ICONSTOP);
-		return TRUE;
-	}
-
-	setlocale(LC_NUMERIC, oldLocale);
-
-	return TRUE;
-}
-	
