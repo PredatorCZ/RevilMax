@@ -1,14 +1,11 @@
 # RevilMax
-RevilMax is so far a RE Engine importer for 3ds Max. Buildable under VS2015.\
-Supported 3ds max versions: **2010 - 2019**\
+RevilMax is RE Engine and MT Framework importer for 3ds Max. Buildable under VS2015.\
+Supported 3ds max versions: **2010 - 2020**\
 Tested on 3ds max versions: **2017**
 
 ## Building
-### Editing .vcxproj
-All essential configurations are within **PropertyGroup Label="MAXConfigurations"** field.
-- **MaxSDK**: changes path where is your MAX SDK installation.
-If your MAX SDK installation is somewhere else than default path stated in this field, you can edit it here.
-- **MaxDebugConfiguration**: changes 3ds max version and platform, so all necessary files are copied into plugin directory, this will enable post-build event. You must have set ***Working Directory*** under ***Debugging*** in ***Project Properties*** to location, where 3ds max is installed (where 3dsmax.exe is).
+
+Head to the [Building a 3ds max CMake projects](https://github.com/PredatorCZ/PreCore/wiki/Building-a-3ds-max-CMake-projects) wiki page.
 
 ## Installation
 ### [Latest Release](https://github.com/PredatorCZ/RevilMax/releases/)
