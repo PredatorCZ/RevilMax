@@ -1,13 +1,11 @@
 cmake_minimum_required(VERSION 3.3)
 
-project(RevilMax VERSION 1.2)
+project(RevilMax VERSION 1.3)
 
-set(TARGETEX_LOCATION 3rd_party/RevilLib/3rd_party/PreCore/cmake)
-include(${TARGETEX_LOCATION}/3dsmax.cmake)
-
-set (HavokLibLibraryPath ../RevilLib_${CMAKE_GENERATOR_PLATFORM}_${CHAR_TYPE})
+set (RevilLibLibraryPath ../RevilLib_${CMAKE_GENERATOR_PLATFORM})
 
 add_subdirectory(3rd_party/RevilLib ${RevilLibLibraryPath})
+include(${PRECORE_SOURCE_DIR}/cmake/3dsmax.cmake)
 
 build_target(
 	TYPE SHARED
@@ -26,7 +24,7 @@ build_target(
 	INCLUDES
 		${MaxSDK}/include
 		3rd_party/RevilLib/include
-		3rd_party/RevilLib/3rd_party/PreCore
+		${PRECORE_SOURCE_DIR}
 	LINK_DIRS
 		${MaxSDKLibrariesPath}
 	AUTHOR "Lukas Cone"

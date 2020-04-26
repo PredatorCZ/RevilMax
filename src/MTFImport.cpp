@@ -18,11 +18,9 @@
 */
 #include "datas/reflector.hpp"
 
-#include "LMT.h"
 #include "RevilMax.h"
-#include "datas/VectorsSimd.hpp"
-#include "datas/esstring.h"
 #include "datas/masterprinter.hpp"
+#include "lmt.hpp"
 #include <algorithm>
 #include <iiksys.h>
 #include <iksolver.h>
@@ -53,7 +51,7 @@ public:
   virtual int DoImport(const TCHAR *name, ImpInterface *i, Interface *gi,
                        BOOL suppressPrompts = FALSE); // Import file
 
-  TimeValue LoadMotion(const LMTAnimation &mot, TimeValue startTime = 0);
+  TimeValue LoadMotion(const uni::Motion &mot, TimeValue startTime = 0);
 };
 
 class : public ClassDesc2 {
@@ -119,18 +117,18 @@ struct LMTNode {
   };
   INode *nde;
   std::unique_ptr<LMTNode> ikTarget;
-  int LMTBone = -3;
+  int32 LMTBone = -3;
 
   INode *GetNode() { return ikTarget ? ikTarget->nde : nde; }
 
   LMTNode(INode *input) : nde(input) {
     ReflectorWrap<LMTNode> refl(this);
-    const int numRefl = refl.GetNumReflectedValues();
+    const size_t numRefl = refl.GetNumReflectedValues();
     bool corrupted = false;
 
-    for (int r = 0; r < numRefl; r++) {
+    for (size_t r = 0; r < numRefl; r++) {
       Reflector::KVPair reflPair = refl.GetReflectedPair(r);
-      TSTRING usName = esStringConvert<TCHAR>(reflPair.name);
+      TSTRING usName = ToTSTRING(reflPair.name);
 
       if (!nde->UserPropExists(usName.c_str())) {
         corrupted = true;
@@ -145,8 +143,7 @@ struct LMTNode {
         continue;
       }
 
-      refl.SetReflectedValue(reflPair.name,
-                             esStringConvert<char>(value.data()).c_str());
+      refl.SetReflectedValue(reflPair.name, std::to_string(value.data()));
     }
 
     if (LMTBone > 0) {
@@ -178,8 +175,8 @@ struct LMTNode {
 
     for (int r = 0; r < numRefl; r++) {
       Reflector::KVPair reflPair = refl.GetReflectedPair(r);
-      TSTRING usName = esStringConvert<TCHAR>(reflPair.name);
-      TSTRING usVal = esStringConvert<TCHAR>(reflPair.value.c_str());
+      TSTRING usName = ToTSTRING(reflPair.name);
+      TSTRING usVal = ToTSTRING(reflPair.value);
 
       nde->SetUserPropString(usName.c_str(), usVal.c_str());
     }
@@ -327,13 +324,14 @@ public:
 
 struct MTFTrackPair {
   INode *nde;
-  const LMTTrack *track;
+  const uni::MotionTrack *track;
   INode *scaleNode;
   MTFTrackPair *parent;
   std::vector<Vector4A16> frames;
   std::vector<MTFTrackPair *> children;
 
-  MTFTrackPair(INode *inde, const LMTTrack *tck, MTFTrackPair *prent = nullptr)
+  MTFTrackPair(INode *inde, const uni::MotionTrack *tck,
+               MTFTrackPair *prent = nullptr)
       : nde(inde), track(tck), scaleNode(nullptr), parent(prent) {}
 };
 
@@ -417,7 +415,7 @@ static INode *BuildScaleHandles(MTFTrackPairCnt &pairs, MTFTrackPair &item,
   }
 
   for (auto c : childNodes) {
-    const LMTTrack *foundTrack = nullptr;
+    const uni::MotionTrack *foundTrack = nullptr;
 
     for (auto &t : pairs)
       if (t.nde == c || t.scaleNode == c) {
@@ -434,7 +432,7 @@ static INode *BuildScaleHandles(MTFTrackPairCnt &pairs, MTFTrackPair &item,
 }
 
 static void PopulateScaleData(MTFTrackPair &item, const Times &times,
-                              const Secs &secs, float frameRate) {
+                              const Secs &secs) {
   if (!item.scaleNode)
     return;
 
@@ -446,7 +444,7 @@ static void PopulateScaleData(MTFTrackPair &item, const Times &times,
   if (item.track) {
     for (int t = 0; t < numKeys; t++) {
       Vector4A16 cVal;
-      item.track->Interpolate(cVal, secs[t], frameRate);
+      item.track->GetValue(cVal, secs[t]);
       item.frames[t] *= cVal;
 
       if (item.parent)
@@ -465,7 +463,7 @@ static void PopulateScaleData(MTFTrackPair &item, const Times &times,
   AnimateOff();
 
   for (auto &c : item.children)
-    PopulateScaleData(*c, times, secs, frameRate);
+    PopulateScaleData(*c, times, secs);
 }
 
 static void
@@ -523,10 +521,8 @@ static void ScaleTranslations(MTFTrackPair &item, const Times &times) {
   }
 }
 
-TimeValue MTFImport::LoadMotion(const LMTAnimation &mot, TimeValue startTime) {
-  const int numTracks = mot.NumTracks();
-  const float frameRate = 30.f * (IDC_CB_FRAMERATE_index + 1);
-  const float aDuration = mot.NumFrames() / frameRate;
+TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
+  const float aDuration = mot.Duration();
 
   TimeValue numTicks = SecToTicks(aDuration);
   TimeValue ticksPerFrame = GetTicksPerFrame();
@@ -550,20 +546,19 @@ TimeValue MTFImport::LoadMotion(const LMTAnimation &mot, TimeValue startTime) {
   const size_t numFrames = frameTimes.size();
   std::vector<MTFTrackPair> scaleTracks;
 
-  for (int t = 0; t < numTracks; t++) {
-    const LMTTrack *tck = mot.Track(t);
-    const int boneID = tck->AnimatedBoneID();
+  for (auto &t : mot) {
+    const size_t boneID = t.BoneIndex();
     LMTNode *lNode = iBoneScanner.LookupNode(boneID);
 
     if (!lNode)
       continue;
 
-    if (tck->GetTrackType() == LMTTrack::TrackType_LocalScale)
-      scaleTracks.emplace_back(lNode->nde, tck);
+    if (t.TrackType() == uni::MotionTrack::TrackType_e::Scale)
+      scaleTracks.emplace_back(lNode->nde, &t);
 
-    if (tck->BoneType())
-      printline("Bone: ", << lNode->nde->GetName()
-                          << ", RuleID: " << tck->BoneType());
+    /*if (t.BoneType())
+      printline("Bone: " << es::ToUTF8(lNode->nde->GetName())
+                          << ", RuleID: " << tck->BoneType());*/
   }
 
   std::vector<MTFTrackPair *> rootsOnly;
@@ -578,36 +573,32 @@ TimeValue MTFImport::LoadMotion(const LMTAnimation &mot, TimeValue startTime) {
   iBoneScanner.RescanBones();
   iBoneScanner.RestoreBasePose(startTime);
 
-  for (int t = 0; t < numTracks; t++) {
-    const LMTTrack *tck = mot.Track(t);
-    const int boneID = tck->AnimatedBoneID();
+  for (auto &t : mot) {
+    const size_t boneID = t.BoneIndex();
     LMTNode *lNode = iBoneScanner.LookupNode(boneID);
 
     if (!lNode) {
-      printwarning("[MTF] Couldn't find LMTBone: ", << boneID);
+      printwarning("[MTF] Couldn't find LMTBone: " << boneID);
       continue;
     }
 
     INode *fNode =
         !flags[IDC_CH_DISABLEIK_checked] ? lNode->GetNode() : lNode->nde;
     Control *cnt = fNode->GetTMController();
-    const LMTTrack::TrackType tckType = tck->GetTrackType();
 
-    switch (tckType) {
-    case LMTTrack::TrackType_AbsolutePosition:
-    case LMTTrack::TrackType_LocalPosition: {
+    switch (t.TrackType()) {
+    case uni::MotionTrack::TrackType_e::Position: {
       Control *posCnt = cnt->GetPositionController();
 
       AnimateOn();
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        tck->Interpolate(cVal, frameTimes[i], frameRate);
+        t.GetValue(cVal, frameTimes[i]);
         cVal *= IDC_EDIT_SCALE_value;
         Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
-        if (fNode->GetParentNode()->IsRootNode() ||
-            tckType == LMTTrack::TrackType_AbsolutePosition)
+        if (fNode->GetParentNode()->IsRootNode())
           kVal = corMat.PointTransform(kVal);
 
         posCnt->SetValue(frameTimesTicks[i], &kVal);
@@ -616,18 +607,16 @@ TimeValue MTFImport::LoadMotion(const LMTAnimation &mot, TimeValue startTime) {
       AnimateOff();
       break;
     }
-    case LMTTrack::TrackType_AbsoluteRotation:
-    case LMTTrack::TrackType_LocalRotation: {
+    case uni::MotionTrack::TrackType_e::Rotation: {
       Control *rotCnt = cnt->GetRotationController();
       AnimateOn();
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        tck->Interpolate(cVal, frameTimes[i], frameRate);
+        t.GetValue(cVal, frameTimes[i]);
         Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
 
-        if (fNode->GetParentNode()->IsRootNode() ||
-            tckType == LMTTrack::TrackType_AbsoluteRotation) {
+        if (fNode->GetParentNode()->IsRootNode()) {
           Matrix3 cMat;
           cMat.SetRotate(kVal);
           kVal = cMat * corMat;
@@ -645,7 +634,7 @@ TimeValue MTFImport::LoadMotion(const LMTAnimation &mot, TimeValue startTime) {
   }
 
   for (auto &s : rootsOnly)
-    PopulateScaleData(*s, frameTimesTicks, frameTimes, frameRate);
+    PopulateScaleData(*s, frameTimesTicks, frameTimes);
 
   for (auto &s : rootsOnly)
     ScaleTranslations(*s, frameTimesTicks);
@@ -660,19 +649,20 @@ TimeValue MTFImport::LoadMotion(const LMTAnimation &mot, TimeValue startTime) {
 
 int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
                         Interface * /*ip*/, BOOL suppressPrompts) {
+  REGISTER_CLASSES(LMTNode);
   char *oldLocale = setlocale(LC_NUMERIC, NULL);
   setlocale(LC_NUMERIC, "en-US");
 
   TSTRING _filename = fileName;
   LMT mainAsset;
 
-  if (mainAsset.Load(esStringConvert<char>(fileName).c_str(), true))
+  if (mainAsset.Load(std::to_string(fileName).c_str(), true))
     return FALSE;
 
   int curMotionID = 0;
 
   for (auto &m : mainAsset) {
-    if (m)
+    if (&m)
       motionNames.push_back(ToTSTRING(curMotionID));
     else
       motionNames.push_back(_T("--[Empty]--"));
@@ -697,11 +687,12 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
     SetFrameRate(frameRate);
 
   if (flags[IDC_RD_ANISEL_checked]) {
-    const LMTAnimation *mot = mainAsset.Animation(IDC_CB_MOTION_index);
+    uni::Motion *mot = mainAsset.At(IDC_CB_MOTION_index);
 
     if (!mot)
       return FALSE;
 
+    mot->FrameRate(frameRate);
     LoadMotion(*mot, 0);
   } else {
     TimeValue lastTime = 0;
@@ -710,18 +701,19 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
     printline("Sequencer not found, dumping animation ranges:");
 
     for (auto &a : mainAsset) {
+      a.FrameRate(frameRate);
 
-      if (a) {
-        TimeValue nextTime = LoadMotion(*a, lastTime);
-        printer << motionNames[i] << ": " << lastTime << ", " << nextTime;
+      TimeValue nextTime = LoadMotion(a, lastTime);
+      printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
+              << nextTime;
+      LMTAnimation &_a = static_cast<LMTAnimation &>(a);
 
-        if (a->LoopFrame() > 0)
-          printer << ", loopFrame: " << SecToTicks(a->LoopFrame() / frameRate);
+      if (_a.LoopFrame() > 0)
+        printer << ", loopFrame: " << SecToTicks(_a.LoopFrame() / frameRate);
 
-        printer >> 1;
-        lastTime = nextTime;
-        iBoneScanner.LockPose(nextTime - GetTicksPerFrame());
-      }
+      printer >> 1;
+      lastTime = nextTime;
+      iBoneScanner.LockPose(nextTime - GetTicksPerFrame());
 
       i++;
     }

@@ -78,11 +78,11 @@ __declspec(dllexport) ClassDesc *LibClassDesc(int i) {
 // to catch obsolete DLLs.
 __declspec(dllexport) ULONG LibVersion() { return VERSION_3DSMAX; }
 
-void PrintLog(TCHAR *msg) {
+void PrintLog(const char *msg) {
   if (!IsWindowVisible(the_listener_window) || IsIconic(the_listener_window))
     show_listener();
 
-  mprintf(msg);
+  mprintf(ToTSTRING(msg).c_str());
   mflush();
 }
 

@@ -202,12 +202,12 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
       break;
 
       MSGCheckbox(IDC_RD_ANIALL);
-      imp->flags(RevilMax::IDC_RD_ANISEL_checked, false);
+      imp->flags -= RevilMax::IDC_RD_ANISEL_checked;
       MSGEnable(IDC_RD_ANISEL, IDC_CB_MOTION);
       break;
 
       MSGCheckbox(IDC_RD_ANISEL);
-      imp->flags(RevilMax::IDC_RD_ANIALL_checked, false);
+      imp->flags -= RevilMax::IDC_RD_ANIALL_checked;
       MSGEnable(IDC_RD_ANISEL, IDC_CB_MOTION);
       break;
 

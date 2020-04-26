@@ -18,11 +18,11 @@
 */
 
 #include "RevilMax.h"
-#include "datas/esstring.h"
 #include "datas/masterprinter.hpp"
+#include "datas/tchar.hpp"
 #include "re_asset.hpp"
-#include "uni_motion.hpp"
-#include "uni_skeleton.hpp"
+#include "uni/motion.hpp"
+#include "uni/skeleton.hpp"
 #include <memory>
 #include <unordered_map>
 
@@ -50,7 +50,7 @@ public:
   virtual int DoImport(const TCHAR *name, ImpInterface *i, Interface *gi,
                        BOOL suppressPrompts = FALSE); // Import file
 
-  std::unordered_map<uint, INode *> nodes;
+  std::unordered_map<uint32, INode *> nodes;
 
   void LoadSkeleton(uni::Skeleton *skel, TimeValue startTime = 0);
   TimeValue LoadMotion(uni::Motion *mot, TimeValue startTime = 0);
@@ -116,7 +116,7 @@ void REEngineImport::ShowAbout(HWND hWnd) { ShowAboutDLG(hWnd); }
 
 void REEngineImport::LoadSkeleton(uni::Skeleton *skel, TimeValue startTime) {
   for (auto &b : *skel) {
-    TSTRING boneName = esStringConvert<TCHAR>(b.Name().c_str());
+    TSTRING boneName = ToTSTRING(b.Name());
     INode *node = GetCOREInterface()->GetINodeByName(boneName.c_str());
 
     if (!node) {
@@ -188,7 +188,6 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
     numTicks -= overlappingTicks;
 
   Interval aniRange(startTime, startTime + numTicks - ticksPerFrame);
-  GetCOREInterface()->SetAnimRange(aniRange);
   std::vector<float> frameTimes;
   std::vector<TimeValue> frameTimesTicks;
 
@@ -198,84 +197,88 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
     frameTimesTicks.push_back(v);
   }
 
+  if (aniRange.Start() == aniRange.End()) {
+    aniRange.SetEnd(aniRange.End() + ticksPerFrame);
+  }
+
+  GetCOREInterface()->SetAnimRange(aniRange);
+
   size_t numFrames = frameTimes.size();
 
-  for (auto &t : *mot) {
-    if (!nodes.count(t.Index()))
+  for (auto &v : *mot) {
+    if (!nodes.count(v.BoneIndex()))
       continue;
 
-    INode *node = nodes[t.Index()];
+    INode *node = nodes[v.BoneIndex()];
     Control *cnt = node->GetTMController();
 
-    for (auto &v : t) {
-      switch (v.CurveType()) {
-      case uni::MotionCurve::Position: {
-        Control *posControl = cnt->GetPositionController();
+    switch (v.TrackType()) {
+    case uni::MotionTrack::Position: {
+      Control *posControl = cnt->GetPositionController();
 
-        AnimateOn();
+      AnimateOn();
 
-        for (int i = 0; i < numFrames; i++) {
-          Vector4A16 cVal;
-          v.GetValue(cVal, frameTimes[i]);
-          cVal *= IDC_EDIT_SCALE_value;
-          Point3 kVal = reinterpret_cast<Point3 &>(cVal);
+      for (int i = 0; i < numFrames; i++) {
+        Vector4A16 cVal;
+        v.GetValue(cVal, frameTimes[i]);
+        cVal *= IDC_EDIT_SCALE_value;
+        Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
-          if (node->GetParentNode()->IsRootNode())
-            kVal = corMat.PointTransform(kVal);
+        if (node->GetParentNode()->IsRootNode())
+          kVal = corMat.PointTransform(kVal);
 
-          posControl->SetValue(frameTimesTicks[i], &kVal);
+        posControl->SetValue(frameTimesTicks[i], &kVal);
+      }
+
+      AnimateOff();
+      break;
+    }
+
+    case uni::MotionTrack::Rotation: {
+      Control *rotControl = cnt->GetRotationController();
+
+      AnimateOn();
+
+      for (int i = 0; i < numFrames; i++) {
+        Vector4A16 cVal;
+        v.GetValue(cVal, frameTimes[i]);
+        Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
+
+        if (node->GetParentNode()->IsRootNode()) {
+          Matrix3 cMat;
+          cMat.SetRotate(kVal);
+          kVal = cMat * corMat;
         }
 
-        AnimateOff();
-        break;
+        rotControl->SetValue(frameTimesTicks[i], &kVal);
       }
 
-      case uni::MotionCurve::Rotation: {
-        Control *rotControl = cnt->GetRotationController();
+      AnimateOff();
+      break;
+    }
 
-        AnimateOn();
+    case uni::MotionTrack::Scale: {
+      Control *sclControl = cnt->GetScaleController();
 
-        for (int i = 0; i < numFrames; i++) {
-          Vector4A16 cVal;
-          v.GetValue(cVal, frameTimes[i]);
-          Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
+      AnimateOn();
 
-          if (node->GetParentNode()->IsRootNode()) {
-            Matrix3 cMat;
-            cMat.SetRotate(kVal);
-            kVal = cMat * corMat;
-          }
+      for (int i = 0; i < numFrames; i++) {
+        Vector4A16 cVal;
+        v.GetValue(cVal, frameTimes[i]);
+        Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
-          rotControl->SetValue(frameTimesTicks[i], &kVal);
-        }
+        if (node->GetParentNode()->IsRootNode())
+          kVal = corMat.PointTransform(kVal);
 
-        AnimateOff();
-        break;
+        sclControl->SetValue(frameTimesTicks[i], &kVal);
       }
 
-      case uni::MotionCurve::Scale: {
-        Control *sclControl = cnt->GetScaleController();
+      AnimateOff();
+      break;
+    }
 
-        AnimateOn();
-
-        for (int i = 0; i < numFrames; i++) {
-          Vector4A16 cVal;
-          v.GetValue(cVal, frameTimes[i]);
-          Point3 kVal = reinterpret_cast<Point3 &>(cVal);
-
-          if (node->GetParentNode()->IsRootNode())
-            kVal = corMat.PointTransform(kVal);
-
-          sclControl->SetValue(frameTimesTicks[i], &kVal);
-        }
-
-        AnimateOff();
-        break;
-      }
-
-      default:
-        break;
-      }
+    default:
+      break;
     }
   }
 
@@ -288,8 +291,8 @@ int REEngineImport::DoImport(const TCHAR *fileName,
   char *oldLocale = setlocale(LC_NUMERIC, NULL);
   setlocale(LC_NUMERIC, "en-US");
 
-  std::string _filename = esStringConvert<char>(fileName);
-  std::unique_ptr<REAsset> mainAsset(REAsset::Load(_filename.c_str()));
+  std::unique_ptr<REAsset> mainAsset(
+      REAsset::Load(std::to_string(fileName).c_str()));
 
   if (!mainAsset)
     return FALSE;
@@ -301,9 +304,9 @@ int REEngineImport::DoImport(const TCHAR *fileName,
   uni::Motion *cMotion = nullptr;
   uni::Skeleton *skel = skelList->Size() == 1 ? skelList->At(0) : nullptr;
 
-  if (motionList) {
+  if (motionList && motionList->Size()) {
     for (auto &m : *motionList) {
-      motionNames.emplace_back(esStringConvert<TCHAR>(m.Name().c_str()));
+      motionNames.emplace_back(ToTSTRING(m.Name()));
     }
 
     if (!suppressPrompts)
@@ -327,7 +330,7 @@ int REEngineImport::DoImport(const TCHAR *fileName,
 
         LoadSkeleton(_skel, lastTime);
         TimeValue nextTime = LoadMotion(&m, lastTime);
-        printer << motionNames[i] << ": " << lastTime << ", " << nextTime >> 1;
+        printer << std::to_string(motionNames[i]) << ": " << lastTime << ", " << nextTime >> 1;
         lastTime = nextTime;
         i++;
       }
