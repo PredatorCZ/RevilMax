@@ -73,7 +73,7 @@ ClassDesc2 *GetREEngineImportDesc() { return &REEngineImportDesc; }
 //--- HavokImp -------------------------------------------------------
 REEngineImport::REEngineImport() {}
 
-int REEngineImport::ExtCount() { return 6; }
+int REEngineImport::ExtCount() { return 8; }
 
 const TCHAR *REEngineImport::Ext(int n) {
   switch (n) {
@@ -89,6 +89,10 @@ const TCHAR *REEngineImport::Ext(int n) {
     return _T("motlist.99");
   case 5:
     return _T("mot.78");
+  case 6:
+    return _T("motlist.60");
+  case 7:
+    return _T("mot.43");
   default:
     return nullptr;
   }
@@ -316,7 +320,7 @@ int REEngineImport::DoImport(const TCHAR *fileName,
     if (flags[IDC_RD_ANISEL_checked]) {
       cMotion = motionList->At(IDC_CB_MOTION_index);
 
-      if (!skel) {
+      if (!skel && skelList->Size()) {
         skel = skelList->At(IDC_CB_MOTION_index);
       }
     } else {
@@ -326,11 +330,16 @@ int REEngineImport::DoImport(const TCHAR *fileName,
       printline("Sequencer not found, dumping animation ranges:");
 
       for (auto &m : *motionList) {
-        uni::Skeleton *_skel = skel ? skel : skelList->At(i);
+        if (skelList->Size()) {
+          uni::Skeleton *_skel = skel ? skel : skelList->At(i);
 
-        LoadSkeleton(_skel, lastTime);
+          LoadSkeleton(_skel, lastTime);
+        }
+
         TimeValue nextTime = LoadMotion(&m, lastTime);
-        printer << std::to_string(motionNames[i]) << ": " << lastTime << ", " << nextTime >> 1;
+        printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
+                << nextTime >>
+            1;
         lastTime = nextTime;
         i++;
       }
@@ -351,7 +360,10 @@ int REEngineImport::DoImport(const TCHAR *fileName,
     return TRUE;
   }
 
-  LoadSkeleton(skel);
+  if (skel) {
+    LoadSkeleton(skel);
+  }
+
   LoadMotion(cMotion);
 
   setlocale(LC_NUMERIC, oldLocale);

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.3)
 
-project(RevilMax VERSION 1.3)
+project(RevilMax VERSION 1.4)
 
 set (RevilLibLibraryPath ../RevilLib_${CMAKE_GENERATOR_PLATFORM})
 
