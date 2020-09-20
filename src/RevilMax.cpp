@@ -18,7 +18,7 @@
 */
 
 #include "RevilMax.h"
-#include "datas/DirectoryScanner.hpp"
+#include "datas/directory_scanner.hpp"
 #include "resource.h"
 #include <3dsmaxport.h>
 #include <IPathConfigMgr.h>
@@ -29,7 +29,7 @@
 extern HINSTANCE hInstance;
 
 const TCHAR _name[] = _T("Revil Tool");
-const TCHAR _info[] = _T("\n" RevilMax_COPYRIGHT "\nVersion " RevilMax_VERSION);
+const TCHAR _info[] = _T("\n" RevilMax_COPYRIGHT "Lukas Cone\nVersion " RevilMax_VERSION);
 const TCHAR _license[] =
     _T("Revil Tool uses RevilLib, Copyright(C) 2017-2020 Lukas Cone.");
 const TCHAR _homePage[] =
@@ -59,6 +59,9 @@ void RevilMax::LoadCFG() {
   GetCFGChecked(IDC_RD_ANISEL);
   GetCFGChecked(IDC_RD_ANIALL);
   GetCFGChecked(IDC_CH_RESAMPLE);
+  GetCFGChecked(IDC_CH_ADDITIVE);
+  GetCFGChecked(IDC_CH_NO_CACHE);
+  GetCFGChecked(IDC_CH_NOLOGBONES);
   GetCFGEnabled(IDC_CB_MOTION);
 }
 
@@ -72,6 +75,9 @@ void RevilMax::SaveCFG() {
   SetCFGChecked(IDC_RD_ANISEL);
   SetCFGChecked(IDC_RD_ANIALL);
   SetCFGChecked(IDC_CH_RESAMPLE);
+  SetCFGChecked(IDC_CH_ADDITIVE);
+  SetCFGChecked(IDC_CH_NO_CACHE);
+  SetCFGChecked(IDC_CH_NOLOGBONES);
   SetCFGEnabled(IDC_CB_MOTION);
 }
 
@@ -196,6 +202,15 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
       return 1;
 
       MSGCheckbox(IDC_CH_RESAMPLE);
+      break;
+
+      MSGCheckbox(IDC_CH_ADDITIVE);
+      break;
+
+      MSGCheckbox(IDC_CH_NO_CACHE);
+      break;
+
+      MSGCheckbox(IDC_CH_NOLOGBONES);
       break;
 
       MSGCheckbox(IDC_CH_DISABLEIK);

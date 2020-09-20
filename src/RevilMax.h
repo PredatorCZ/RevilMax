@@ -59,7 +59,10 @@ public:
     IDConfigBool(IDC_RD_ANIALL),
     IDConfigBool(IDC_RD_ANISEL),
     IDConfigBool(IDC_CH_RESAMPLE),
+    IDConfigBool(IDC_CH_ADDITIVE),
     IDConfigBool(IDC_CH_DISABLEIK),
+    IDConfigBool(IDC_CH_NO_CACHE),
+    IDConfigBool(IDC_CH_NOLOGBONES),
     IDConfigVisible(IDC_CB_MOTION),
   };
 

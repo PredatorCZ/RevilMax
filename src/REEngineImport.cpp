@@ -18,7 +18,7 @@
 */
 
 #include "RevilMax.h"
-#include "datas/masterprinter.hpp"
+#include "datas/master_printer.hpp"
 #include "datas/tchar.hpp"
 #include "re_asset.hpp"
 #include "uni/motion.hpp"
@@ -52,8 +52,8 @@ public:
 
   std::unordered_map<uint32, INode *> nodes;
 
-  void LoadSkeleton(uni::Skeleton *skel, TimeValue startTime = 0);
-  TimeValue LoadMotion(uni::Motion *mot, TimeValue startTime = 0);
+  void LoadSkeleton(const uni::Skeleton *skel, TimeValue startTime = 0);
+  TimeValue LoadMotion(const uni::Motion *mot, TimeValue startTime = 0);
 };
 
 class : public ClassDesc2 {
@@ -104,10 +104,10 @@ const TCHAR *REEngineImport::LongDesc() { return _T("RE Engine Import"); }
 
 const TCHAR *REEngineImport::ShortDesc() { return _T("RE Engine Import"); }
 
-const TCHAR *REEngineImport::AuthorName() { return _T(RevilMax_AUTHOR); }
+const TCHAR *REEngineImport::AuthorName() { return _T("Lukas Cone"); }
 
 const TCHAR *REEngineImport::CopyrightMessage() {
-  return _T(RevilMax_COPYRIGHT);
+  return _T(RevilMax_COPYRIGHT "Lukas Cone");
 }
 
 const TCHAR *REEngineImport::OtherMessage1() { return _T(""); }
@@ -118,12 +118,19 @@ unsigned int REEngineImport::Version() { return REVILMAX_VERSIONINT; }
 
 void REEngineImport::ShowAbout(HWND hWnd) { ShowAboutDLG(hWnd); }
 
-void REEngineImport::LoadSkeleton(uni::Skeleton *skel, TimeValue startTime) {
+void REEngineImport::LoadSkeleton(const uni::Skeleton *skel,
+                                  TimeValue startTime) {
   for (auto &b : *skel) {
-    TSTRING boneName = ToTSTRING(b.Name());
+    TSTRING boneName = ToTSTRING(b->Name());
     INode *node = GetCOREInterface()->GetINodeByName(boneName.c_str());
 
     if (!node) {
+      if (flags[IDC_CH_ADDITIVE_checked]) {
+        if (!flags[IDC_CH_NOLOGBONES_checked]) {
+          printerror("Cannot find bone: " << b->Name());
+        }
+        continue;
+      }
       Object *obj = static_cast<Object *>(
           CreateInstance(HELPER_CLASS_ID, Class_ID(DUMMY_CLASS_ID, 0)));
       node = GetCOREInterface()->CreateObjectNode(obj);
@@ -132,23 +139,25 @@ void REEngineImport::LoadSkeleton(uni::Skeleton *skel, TimeValue startTime) {
       node->SetName(ToBoneName(boneName));
     }
 
-    auto boneTM = b.Transform();
-    boneTM.Transpose();
+    uni::RTSValue boneTM;
+    b->GetTM(boneTM);
 
-    Matrix3 nodeTM = {
-        reinterpret_cast<const Point3 &>(boneTM.r1),
-        reinterpret_cast<const Point3 &>(boneTM.r2),
-        reinterpret_cast<const Point3 &>(boneTM.r3),
-        reinterpret_cast<const Point3 &>(boneTM.r4 * IDC_EDIT_SCALE_value),
-    };
+    Matrix3 nodeTM;
+    nodeTM.SetRotate(
+        reinterpret_cast<const Quat &>(boneTM.rotation.QConjugate()));
+    nodeTM.SetTranslate(reinterpret_cast<const Point3 &>(boneTM.translation *
+                                                         IDC_EDIT_SCALE_value));
 
-    auto parentBone = b.Parent();
+    auto parentBone = b->Parent();
 
-    if (parentBone) {
+    if (parentBone && !flags[IDC_CH_ADDITIVE_checked]) {
       INode *pNode = nodes[parentBone->Index()];
 
       pNode->AttachChild(node);
-      nodeTM *= pNode->GetNodeTM(startTime);
+    } else if (flags[IDC_CH_ADDITIVE_checked]) {
+      Matrix3 pMat = node->GetParentTM(-1);
+      pMat.Invert();
+      nodeTM = node->GetNodeTM(-1) * pMat;
     } else {
       nodeTM *= corMat;
     }
@@ -169,21 +178,26 @@ void REEngineImport::LoadSkeleton(uni::Skeleton *skel, TimeValue startTime) {
         Class_ID(LININTERP_SCALE_CLASS_ID, 0))
       cnt->SetScaleController((Control *)CreateInstance(
           CTRL_SCALE_CLASS_ID, Class_ID(LININTERP_SCALE_CLASS_ID, 0)));
+
     AnimateOn();
-    node->SetNodeTM(startTime, nodeTM);
+    SetXFormPacket packet(nodeTM);
+    node->GetTMController()->SetValue(startTime, &packet);
+    node->GetTMController()->SetValue(-1, &packet);
     AnimateOff();
-    node->SetUserPropString(_T("BoneHash"), ToTSTRING(b.Index()).c_str());
-    nodes[b.Index()] = node;
+
+    node->SetUserPropString(_T("BoneHash"), ToTSTRING(b->Index()).c_str());
+    nodes[b->Index()] = node;
   }
 }
 
-TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
+TimeValue REEngineImport::LoadMotion(const uni::Motion *mot,
+                                     TimeValue startTime) {
   if (!flags[IDC_CH_RESAMPLE_checked])
     SetFrameRate(mot->FrameRate());
 
   const float aDuration = mot->Duration();
   TimeValue numTicks = SecToTicks(aDuration);
-  TimeValue ticksPerFrame = GetTicksPerFrame();
+  const TimeValue ticksPerFrame = GetTicksPerFrame();
   TimeValue overlappingTicks = numTicks % ticksPerFrame;
 
   if (overlappingTicks > (ticksPerFrame / 2))
@@ -196,7 +210,7 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
   std::vector<TimeValue> frameTimesTicks;
 
   for (TimeValue v = aniRange.Start(); v <= aniRange.End();
-       v += GetTicksPerFrame()) {
+       v += ticksPerFrame) {
     frameTimes.push_back(TicksToSec(v - startTime));
     frameTimesTicks.push_back(v);
   }
@@ -210,13 +224,13 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
   size_t numFrames = frameTimes.size();
 
   for (auto &v : *mot) {
-    if (!nodes.count(v.BoneIndex()))
+    if (!nodes.count(v->BoneIndex()))
       continue;
 
-    INode *node = nodes[v.BoneIndex()];
+    INode *node = nodes[v->BoneIndex()];
     Control *cnt = node->GetTMController();
 
-    switch (v.TrackType()) {
+    switch (v->TrackType()) {
     case uni::MotionTrack::Position: {
       Control *posControl = cnt->GetPositionController();
 
@@ -224,7 +238,7 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        v.GetValue(cVal, frameTimes[i]);
+        v->GetValue(cVal, frameTimes[i]);
         cVal *= IDC_EDIT_SCALE_value;
         Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
@@ -245,7 +259,7 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        v.GetValue(cVal, frameTimes[i]);
+        v->GetValue(cVal, frameTimes[i]);
         Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
 
         if (node->GetParentNode()->IsRootNode()) {
@@ -268,7 +282,7 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        v.GetValue(cVal, frameTimes[i]);
+        v->GetValue(cVal, frameTimes[i]);
         Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
         if (node->GetParentNode()->IsRootNode())
@@ -289,36 +303,74 @@ TimeValue REEngineImport::LoadMotion(uni::Motion *mot, TimeValue startTime) {
   return aniRange.End() + ticksPerFrame;
 }
 
+void SwapLocale() {
+  static char *oldLocale = nullptr;
+
+  if (oldLocale) {
+    setlocale(LC_NUMERIC, oldLocale);
+    oldLocale = nullptr;
+  } else {
+    oldLocale = setlocale(LC_NUMERIC, nullptr);
+    setlocale(LC_NUMERIC, "en-US");
+  }
+}
+
+static struct {
+  std::unique_ptr<REAsset> asset;
+  TSTRING filename;
+} areCache;
+
 int REEngineImport::DoImport(const TCHAR *fileName,
                              ImpInterface * /*importerInt*/, Interface * /*ip*/,
-                             BOOL suppressPrompts) {
-  char *oldLocale = setlocale(LC_NUMERIC, NULL);
-  setlocale(LC_NUMERIC, "en-US");
+                             BOOL suppressPrompts) try {
+  SwapLocale();
+  TSTRING _filename = fileName;
+  std::unique_ptr<REAsset> mainAsset;
 
-  std::unique_ptr<REAsset> mainAsset(
-      REAsset::Load(std::to_string(fileName).c_str()));
+  auto UpdateCache = [&](std::unique_ptr<REAsset> &in) {
+    if (!flags[IDC_CH_NO_CACHE_checked]) {
+      areCache.asset = std::move(in);
+    } else {
+      areCache.filename.clear();
+    }
+  };
 
-  if (!mainAsset)
-    return FALSE;
+  if (areCache.filename == _filename) {
+    mainAsset = std::move(areCache.asset);
+  } else {
+    mainAsset = std::unique_ptr<REAsset>(
+        REAsset::Load(std::to_string(_filename).c_str(), true));
 
+    if (!mainAsset) {
+      SwapLocale();
+      return FALSE;
+    }
+
+    auto destroy = std::move(areCache.asset);
+    areCache.filename = _filename;
+  }
   uni::List<uni::Motion> *motionList =
       dynamic_cast<decltype(motionList)>(mainAsset.get());
   uni::List<uni::Skeleton> *skelList =
       dynamic_cast<decltype(skelList)>(mainAsset.get());
-  uni::Motion *cMotion = nullptr;
-  uni::Skeleton *skel = skelList->Size() == 1 ? skelList->At(0) : nullptr;
+  uni::Element<const uni::Motion> cMotion;
+  auto skel = skelList->Size() == 1 ? skelList->At(0) : nullptr;
 
   if (motionList && motionList->Size()) {
     for (auto &m : *motionList) {
-      motionNames.emplace_back(ToTSTRING(m.Name()));
+      motionNames.emplace_back(ToTSTRING(m->Name()));
     }
 
-    if (!suppressPrompts)
-      if (!SpawnDialog())
+    if (!suppressPrompts) {
+      if (!SpawnDialog()) {
+        UpdateCache(mainAsset);
+        SwapLocale();
         return TRUE;
+      }
+    }
 
     if (flags[IDC_RD_ANISEL_checked]) {
-      cMotion = motionList->At(IDC_CB_MOTION_index);
+      cMotion = std::move(motionList->At(IDC_CB_MOTION_index));
 
       if (!skel && skelList->Size()) {
         skel = skelList->At(IDC_CB_MOTION_index);
@@ -327,16 +379,17 @@ int REEngineImport::DoImport(const TCHAR *fileName,
       TimeValue lastTime = 0;
       int i = 0;
 
-      printline("Sequencer not found, dumping animation ranges:");
+      printline(
+          "Sequencer not found, dumping animation ranges (in tick units):");
 
       for (auto &m : *motionList) {
         if (skelList->Size()) {
-          uni::Skeleton *_skel = skel ? skel : skelList->At(i);
+          auto _skel = skel ? std::move(skel) : skelList->At(i);
 
-          LoadSkeleton(_skel, lastTime);
+          LoadSkeleton(_skel.get(), lastTime);
         }
 
-        TimeValue nextTime = LoadMotion(&m, lastTime);
+        TimeValue nextTime = LoadMotion(m.get(), lastTime);
         printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
                 << nextTime >>
             1;
@@ -344,29 +397,47 @@ int REEngineImport::DoImport(const TCHAR *fileName,
         i++;
       }
 
-      setlocale(LC_NUMERIC, oldLocale);
+      SwapLocale();
+      UpdateCache(mainAsset);
       return TRUE;
     }
   }
 
   if (!cMotion) {
-    cMotion = dynamic_cast<uni::Motion *>(mainAsset.get());
+    cMotion = std::move(decltype(cMotion){
+        dynamic_cast<const uni::Motion *>(mainAsset.get()), false});
   }
 
   if (!cMotion) {
     MessageBox(GetActiveWindow(),
                _T("Could't find any defined classes within file."),
                _T("Undefined file."), MB_ICONSTOP);
+    SwapLocale();
+    UpdateCache(mainAsset);
     return TRUE;
   }
 
   if (skel) {
-    LoadSkeleton(skel);
+    LoadSkeleton(skel.get());
   }
 
-  LoadMotion(cMotion);
+  LoadMotion(cMotion.get());
 
-  setlocale(LC_NUMERIC, oldLocale);
+  SwapLocale();
+  UpdateCache(mainAsset);
 
+  return TRUE;
+} catch (const std::exception &e) {
+  areCache.filename.clear();
+  SwapLocale();
+  auto msg = ToTSTRING(e.what());
+  MessageBox(GetActiveWindow(), msg.data(), _T("Exception thrown!"),
+             MB_ICONERROR | MB_OK);
+  return TRUE;
+} catch (...) {
+  areCache.filename.clear();
+  SwapLocale();
+  MessageBox(GetActiveWindow(), _T("Unhandled exception has been thrown!"),
+             _T("Exception thrown!"), MB_ICONERROR | MB_OK);
   return TRUE;
 }

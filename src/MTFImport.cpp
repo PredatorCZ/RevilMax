@@ -19,7 +19,7 @@
 #include "datas/reflector.hpp"
 
 #include "RevilMax.h"
-#include "datas/masterprinter.hpp"
+#include "datas/master_printer.hpp"
 #include "lmt.hpp"
 #include <algorithm>
 #include <iiksys.h>
@@ -95,9 +95,11 @@ const TCHAR *MTFImport::LongDesc() { return _T("MT Framework Import"); }
 
 const TCHAR *MTFImport::ShortDesc() { return _T("MT Framework Import"); }
 
-const TCHAR *MTFImport::AuthorName() { return _T(RevilMax_AUTHOR); }
+const TCHAR *MTFImport::AuthorName() { return _T("Lukas Cone"); }
 
-const TCHAR *MTFImport::CopyrightMessage() { return _T(RevilMax_COPYRIGHT); }
+const TCHAR *MTFImport::CopyrightMessage() {
+  return _T(RevilMax_COPYRIGHT "Lukas Cone");
+}
 
 const TCHAR *MTFImport::OtherMessage1() { return _T(""); }
 
@@ -107,8 +109,7 @@ unsigned int MTFImport::Version() { return REVILMAX_VERSIONINT; }
 
 void MTFImport::ShowAbout(HWND hWnd) { ShowAboutDLG(hWnd); }
 
-struct LMTNode {
-  DECLARE_REFLECTOR;
+struct LMTNode : ReflectorInterface<LMTNode> {
   union {
     struct {
       Vector r1, r2, r3, r4;
@@ -525,7 +526,7 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
   const float aDuration = mot.Duration();
 
   TimeValue numTicks = SecToTicks(aDuration);
-  TimeValue ticksPerFrame = GetTicksPerFrame();
+  const TimeValue ticksPerFrame = GetTicksPerFrame();
   TimeValue overlappingTicks = numTicks % ticksPerFrame;
 
   if (overlappingTicks > (ticksPerFrame / 2))
@@ -538,7 +539,7 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
   Times frameTimesTicks;
 
   for (TimeValue v = aniRange.Start(); v <= aniRange.End();
-       v += GetTicksPerFrame()) {
+       v += ticksPerFrame) {
     frameTimes.push_back(TicksToSec(v - startTime));
     frameTimesTicks.push_back(v);
   }
@@ -547,14 +548,14 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
   std::vector<MTFTrackPair> scaleTracks;
 
   for (auto &t : mot) {
-    const size_t boneID = t.BoneIndex();
+    const size_t boneID = t->BoneIndex();
     LMTNode *lNode = iBoneScanner.LookupNode(boneID);
 
     if (!lNode)
       continue;
 
-    if (t.TrackType() == uni::MotionTrack::TrackType_e::Scale)
-      scaleTracks.emplace_back(lNode->nde, &t);
+    if (t->TrackType() == uni::MotionTrack::TrackType_e::Scale)
+      scaleTracks.emplace_back(lNode->nde, t.get());
 
     /*if (t.BoneType())
       printline("Bone: " << es::ToUTF8(lNode->nde->GetName())
@@ -572,13 +573,16 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
 
   iBoneScanner.RescanBones();
   iBoneScanner.RestoreBasePose(startTime);
+  const bool additive = flags[IDC_CH_ADDITIVE_checked];
 
   for (auto &t : mot) {
-    const size_t boneID = t.BoneIndex();
+    const size_t boneID = t->BoneIndex();
     LMTNode *lNode = iBoneScanner.LookupNode(boneID);
 
     if (!lNode) {
-      printwarning("[MTF] Couldn't find LMTBone: " << boneID);
+      if (!flags[IDC_CH_NOLOGBONES_checked]) {
+        printwarning("[MTF] Couldn't find LMTBone: " << boneID);
+      }
       continue;
     }
 
@@ -586,21 +590,27 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
         !flags[IDC_CH_DISABLEIK_checked] ? lNode->GetNode() : lNode->nde;
     Control *cnt = fNode->GetTMController();
 
-    switch (t.TrackType()) {
+    switch (t->TrackType()) {
     case uni::MotionTrack::TrackType_e::Position: {
       Control *posCnt = cnt->GetPositionController();
+      Point3 additivum;
+
+      if (additive) {
+        posCnt->GetValue(-1, &additivum, FOREVER);
+      }
 
       AnimateOn();
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        t.GetValue(cVal, frameTimes[i]);
+        t->GetValue(cVal, frameTimes[i]);
         cVal *= IDC_EDIT_SCALE_value;
         Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
-        if (fNode->GetParentNode()->IsRootNode())
+        if (fNode->GetParentNode()->IsRootNode() && !additive)
           kVal = corMat.PointTransform(kVal);
 
+        kVal += additivum;
         posCnt->SetValue(frameTimesTicks[i], &kVal);
       }
 
@@ -609,19 +619,25 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
     }
     case uni::MotionTrack::TrackType_e::Rotation: {
       Control *rotCnt = cnt->GetRotationController();
+      Quat additivum;
+
+      if (additive) {
+        rotCnt->GetValue(-1, &additivum, FOREVER);
+      }
       AnimateOn();
 
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
-        t.GetValue(cVal, frameTimes[i]);
+        t->GetValue(cVal, frameTimes[i]);
         Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
 
-        if (fNode->GetParentNode()->IsRootNode()) {
+        if (fNode->GetParentNode()->IsRootNode() && !additive) {
           Matrix3 cMat;
           cMat.SetRotate(kVal);
           kVal = cMat * corMat;
         }
 
+        kVal += additivum;
         rotCnt->SetValue(frameTimesTicks[i], &kVal);
       }
 
@@ -647,22 +663,43 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
   return aniRange.End() + ticksPerFrame;
 }
 
+void SwapLocale();
+static struct {
+  LMT asset;
+  TSTRING filename;
+} lmtCache;
+
 int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
-                        Interface * /*ip*/, BOOL suppressPrompts) {
-  REGISTER_CLASSES(LMTNode);
-  char *oldLocale = setlocale(LC_NUMERIC, NULL);
-  setlocale(LC_NUMERIC, "en-US");
+                        Interface * /*ip*/, BOOL suppressPrompts) try {
+  SwapLocale();
 
   TSTRING _filename = fileName;
   LMT mainAsset;
 
-  if (mainAsset.Load(std::to_string(fileName).c_str(), true))
-    return FALSE;
+  auto UpdateCache = [&](LMT &in) {
+    if (!flags[IDC_CH_NO_CACHE_checked]) {
+      lmtCache.asset = std::move(in);
+    } else {
+      lmtCache.filename.clear();
+    }
+  };
+
+  if (lmtCache.filename == _filename) {
+    mainAsset = std::move(lmtCache.asset);
+  } else {
+    if (mainAsset.Load(std::to_string(fileName).c_str(), true)) {
+      SwapLocale();
+      return FALSE;
+    }
+
+    auto destroy = std::move(lmtCache.asset);
+    lmtCache.filename = _filename;
+  }
 
   int curMotionID = 0;
 
   for (auto &m : mainAsset) {
-    if (&m)
+    if (m)
       motionNames.push_back(ToTSTRING(curMotionID));
     else
       motionNames.push_back(_T("--[Empty]--"));
@@ -672,9 +709,13 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
 
   instanceDialogType = DLGTYPE_LMT;
 
-  if (!suppressPrompts)
-    if (!SpawnDialog())
+  if (!suppressPrompts) {
+    if (!SpawnDialog()) {
+      UpdateCache(mainAsset);
+      SwapLocale();
       return TRUE;
+    }
+  }
 
   GetCOREInterface()->ClearNodeSelection();
 
@@ -687,10 +728,13 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
     SetFrameRate(frameRate);
 
   if (flags[IDC_RD_ANISEL_checked]) {
-    uni::Motion *mot = mainAsset.At(IDC_CB_MOTION_index);
+    auto mot = mainAsset.At(IDC_CB_MOTION_index);
 
-    if (!mot)
+    if (!mot) {
+      UpdateCache(mainAsset);
+      SwapLocale();
       return FALSE;
+    }
 
     mot->FrameRate(frameRate);
     LoadMotion(*mot, 0);
@@ -698,15 +742,21 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
     TimeValue lastTime = 0;
     int i = 0;
 
-    printline("Sequencer not found, dumping animation ranges:");
+    printline("Sequencer not found, dumping animation ranges (in tick units):");
 
     for (auto &a : mainAsset) {
-      a.FrameRate(frameRate);
 
-      TimeValue nextTime = LoadMotion(a, lastTime);
+      if (!a) {
+        i++;
+        continue;
+      }
+
+      a->FrameRate(frameRate);
+
+      TimeValue nextTime = LoadMotion(*a.get(), lastTime);
       printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
               << nextTime;
-      LMTAnimation &_a = static_cast<LMTAnimation &>(a);
+      const auto &_a = static_cast<const LMTAnimation &>(*a.get());
 
       if (_a.LoopFrame() > 0)
         printer << ", loopFrame: " << SecToTicks(_a.LoopFrame() / frameRate);
@@ -720,10 +770,23 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
   }
 
   iBoneScanner.RescanBones();
-  iBoneScanner.RestoreBasePose(-GetTicksPerFrame());
+  iBoneScanner.RestoreBasePose(-1);
   iBoneScanner.RestoreIKChains();
+  UpdateCache(mainAsset);
+  SwapLocale();
 
-  setlocale(LC_NUMERIC, oldLocale);
-
+  return TRUE;
+} catch (const std::exception &e) {
+  lmtCache.filename.clear();
+  SwapLocale();
+  auto msg = ToTSTRING(e.what());
+  MessageBox(GetActiveWindow(), msg.data(), _T("Exception thrown!"),
+             MB_ICONERROR | MB_OK);
+  return TRUE;
+} catch (...) {
+  lmtCache.filename.clear();
+  SwapLocale();
+  MessageBox(GetActiveWindow(), _T("Unhandled exception has been thrown!"),
+             _T("Exception thrown!"), MB_ICONERROR | MB_OK);
   return TRUE;
 }

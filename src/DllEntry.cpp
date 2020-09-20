@@ -18,7 +18,7 @@
 */
 
 #include "RevilMax.h"
-#include "datas/MasterPrinter.hpp"
+#include "datas/master_printer.hpp"
 #include <gdiplus.h>
 
 #if VERSION_3DSMAX_B == VERSION_3DSMAX_E(2010)
@@ -55,7 +55,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, ULONG fdwReason,
 
 // This function returns a string that describes the DLL and where the user
 // could purchase the DLL if they don't have it.
-__declspec(dllexport) const TCHAR *LibDescription() { return _T(RevilMax_DESC); }
+__declspec(dllexport) const TCHAR *LibDescription() {
+  return _T(RevilMax_DESC);
+}
 
 // This function returns the number of plug-in classes this DLL
 // TODO: Must change this number when adding a new class
