@@ -16,10 +16,10 @@
 
       Revil Tool uses RevilLib 2017-2020 Lukas Cone
 */
-#include "datas/reflector.hpp"
-
 #include "RevilMax.h"
+#include "datas/except.hpp"
 #include "datas/master_printer.hpp"
+#include "datas/reflector.hpp"
 #include "lmt.hpp"
 #include <algorithm>
 #include <iiksys.h>
@@ -34,22 +34,21 @@ class MTFImport : public SceneImport, RevilMax {
 public:
   // Constructor/Destructor
   MTFImport();
-  virtual ~MTFImport() {}
 
-  virtual int ExtCount();          // Number of extensions supported
-  virtual const TCHAR *Ext(int n); // Extension #n (i.e. "3DS")
-  virtual const TCHAR *
-  LongDesc(); // Long ASCII description (i.e. "Autodesk 3D Studio File")
-  virtual const TCHAR *
-  ShortDesc(); // Short ASCII description (i.e. "3D Studio")
-  virtual const TCHAR *AuthorName();       // ASCII Author name
-  virtual const TCHAR *CopyrightMessage(); // ASCII Copyright message
-  virtual const TCHAR *OtherMessage1();    // Other message #1
-  virtual const TCHAR *OtherMessage2();    // Other message #2
-  virtual unsigned int Version();    // Version number * 100 (i.e. v3.01 = 301)
-  virtual void ShowAbout(HWND hWnd); // Show DLL's "About..." box
-  virtual int DoImport(const TCHAR *name, ImpInterface *i, Interface *gi,
-                       BOOL suppressPrompts = FALSE); // Import file
+  int ExtCount() override;                  // Number of extensions supported
+  const TCHAR *Ext(int n) override;         // Extension #n (i.e. "3DS")
+  const TCHAR *LongDesc() override;         // Long ASCII description
+  const TCHAR *ShortDesc() override;        // Short ASCII description
+  const TCHAR *AuthorName() override;       // ASCII Author name
+  const TCHAR *CopyrightMessage() override; // ASCII Copyright message
+  const TCHAR *OtherMessage1() override;    // Other message #1
+  const TCHAR *OtherMessage2() override;    // Other message #2
+  void ShowAbout(HWND hWnd) override;       // Show DLL's "About..." box
+  unsigned int Version() override; // Version number * 100 (i.e. v3.01 = 301)
+  int DoImport(const TCHAR *name, ImpInterface *i, Interface *gi,
+               BOOL suppressPrompts = FALSE) override;
+
+  void DoImport(const std::string &fileName, bool suppressPrompts);
 
   TimeValue LoadMotion(const uni::Motion &mot, TimeValue startTime = 0);
 };
@@ -573,21 +572,21 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
 
   iBoneScanner.RescanBones();
   iBoneScanner.RestoreBasePose(startTime);
-  const bool additive = flags[IDC_CH_ADDITIVE_checked];
+  const bool additive = checked[Checked::CH_ADDITIVE];
 
   for (auto &t : mot) {
-    const size_t boneID = t->BoneIndex();
+    const int32 boneID = t->BoneIndex();
     LMTNode *lNode = iBoneScanner.LookupNode(boneID);
 
     if (!lNode) {
-      if (!flags[IDC_CH_NOLOGBONES_checked]) {
+      if (!checked[Checked::CH_NOLOGBONES]) {
         printwarning("[MTF] Couldn't find LMTBone: " << boneID);
       }
       continue;
     }
 
     INode *fNode =
-        !flags[IDC_CH_DISABLEIK_checked] ? lNode->GetNode() : lNode->nde;
+        !checked[Checked::CH_DISABLEIK] ? lNode->GetNode() : lNode->nde;
     Control *cnt = fNode->GetTMController();
 
     switch (t->TrackType()) {
@@ -604,7 +603,7 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
         t->GetValue(cVal, frameTimes[i]);
-        cVal *= IDC_EDIT_SCALE_value;
+        cVal *= objectScale;
         Point3 kVal = reinterpret_cast<Point3 &>(cVal);
 
         if (fNode->GetParentNode()->IsRootNode() && !additive)
@@ -666,43 +665,24 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
 void SwapLocale();
 static struct {
   LMT asset;
-  TSTRING filename;
+  std::string filename;
 } lmtCache;
 
-int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
-                        Interface * /*ip*/, BOOL suppressPrompts) try {
-  SwapLocale();
-
-  TSTRING _filename = fileName;
-  LMT mainAsset;
-
-  auto UpdateCache = [&](LMT &in) {
-    if (!flags[IDC_CH_NO_CACHE_checked]) {
-      lmtCache.asset = std::move(in);
-    } else {
-      lmtCache.filename.clear();
-    }
-  };
-
-  if (lmtCache.filename == _filename) {
-    mainAsset = std::move(lmtCache.asset);
-  } else {
-    if (mainAsset.Load(std::to_string(fileName).c_str(), true)) {
-      SwapLocale();
-      return FALSE;
-    }
-
-    auto destroy = std::move(lmtCache.asset);
-    lmtCache.filename = _filename;
+void MTFImport::DoImport(const std::string &fileName, bool suppressPrompts) {
+  if (lmtCache.filename != fileName) {
+    es::Dispose(lmtCache.asset);
+    lmtCache.asset.Load(fileName);
+    lmtCache.filename = fileName;
   }
 
-  int curMotionID = 0;
+  size_t curMotionID = 0;
 
-  for (auto &m : mainAsset) {
-    if (m)
+  for (auto &m : lmtCache.asset) {
+    if (m) {
       motionNames.push_back(ToTSTRING(curMotionID));
-    else
+    } else {
       motionNames.push_back(_T("--[Empty]--"));
+    }
 
     curMotionID++;
   }
@@ -711,9 +691,7 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
 
   if (!suppressPrompts) {
     if (!SpawnDialog()) {
-      UpdateCache(mainAsset);
-      SwapLocale();
-      return TRUE;
+      return;
     }
   }
 
@@ -721,30 +699,29 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
 
   iBoneScanner.RescanBones();
   iBoneScanner.ResetScene();
-  iBoneScanner.SetIKState(!flags[IDC_CH_DISABLEIK_checked]);
-  const float frameRate = 30.f * (IDC_CB_FRAMERATE_index + 1);
+  iBoneScanner.SetIKState(!checked[Checked::CH_DISABLEIK]);
+  const int32 frameRate = 30 * (frameRateIndex + 1);
 
-  if (!flags[IDC_CH_RESAMPLE_checked])
+  if (!checked[Checked::CH_RESAMPLE]) {
     SetFrameRate(frameRate);
+  }
 
-  if (flags[IDC_RD_ANISEL_checked]) {
-    auto mot = mainAsset.At(IDC_CB_MOTION_index);
+  if (checked[Checked::RD_ANISEL]) {
+    auto mot = lmtCache.asset.At(motionIndex);
 
     if (!mot) {
-      UpdateCache(mainAsset);
-      SwapLocale();
-      return FALSE;
+      return;
     }
 
     mot->FrameRate(frameRate);
     LoadMotion(*mot, 0);
   } else {
     TimeValue lastTime = 0;
-    int i = 0;
+    size_t i = 0;
 
     printline("Sequencer not found, dumping animation ranges (in tick units):");
 
-    for (auto &a : mainAsset) {
+    for (auto &a : lmtCache.asset) {
 
       if (!a) {
         i++;
@@ -759,7 +736,8 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
       const auto &_a = static_cast<const LMTAnimation &>(*a.get());
 
       if (_a.LoopFrame() > 0)
-        printer << ", loopFrame: " << SecToTicks(_a.LoopFrame() / frameRate);
+        printer << ", loopFrame: "
+                << SecToTicks(_a.LoopFrame() / float(frameRate));
 
       printer >> 1;
       lastTime = nextTime;
@@ -772,21 +750,46 @@ int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
   iBoneScanner.RescanBones();
   iBoneScanner.RestoreBasePose(-1);
   iBoneScanner.RestoreIKChains();
-  UpdateCache(mainAsset);
+}
+
+int MTFImport::DoImport(const TCHAR *fileName, ImpInterface * /*importerInt*/,
+                        Interface * /*ip*/, BOOL suppressPrompts) {
   SwapLocale();
 
-  return TRUE;
-} catch (const std::exception &e) {
-  lmtCache.filename.clear();
+  TSTRING filename_ = fileName;
+
+  try {
+    DoImport(std::to_string(filename_), suppressPrompts);
+  } catch (const es::InvalidHeaderError &) {
+    lmtCache.filename.clear();
+    SwapLocale();
+    return FALSE;
+  } catch (const std::exception &e) {
+    lmtCache.filename.clear();
+
+    if (suppressPrompts) {
+      printerror(e.what());
+    } else {
+      auto msg = ToTSTRING(e.what());
+      MessageBox(GetActiveWindow(), msg.data(), _T("Exception thrown!"),
+                 MB_ICONERROR | MB_OK);
+    }
+  } catch (...) {
+    lmtCache.filename.clear();
+
+    if (suppressPrompts) {
+      printerror("Unhandled exception has been thrown!");
+    } else {
+      MessageBox(GetActiveWindow(), _T("Unhandled exception has been thrown!"),
+                 _T("Exception thrown!"), MB_ICONERROR | MB_OK);
+    }
+  }
+
+  if (checked[Checked::CH_NO_CACHE]) {
+    lmtCache.filename.clear();
+  }
+
   SwapLocale();
-  auto msg = ToTSTRING(e.what());
-  MessageBox(GetActiveWindow(), msg.data(), _T("Exception thrown!"),
-             MB_ICONERROR | MB_OK);
-  return TRUE;
-} catch (...) {
-  lmtCache.filename.clear();
-  SwapLocale();
-  MessageBox(GetActiveWindow(), _T("Unhandled exception has been thrown!"),
-             _T("Exception thrown!"), MB_ICONERROR | MB_OK);
+
   return TRUE;
 }

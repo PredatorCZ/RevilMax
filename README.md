@@ -1,6 +1,6 @@
 # RevilMax
 
-RevilMax is RE Engine and MT Framework importer for 3ds Max. Buildable under VS2015.\
+RevilMax is RE Engine and MT Framework importer for 3ds Max. Buildable under VS2017.\
 Supported 3ds max versions (x64 only): **2010 - 2021**\
 Tested on 3ds max versions: **2017**
 
@@ -14,7 +14,7 @@ Head to the [Building a 3ds max CMake projects](https://github.com/PredatorCZ/Pr
 
 Move corresponding .dlu located in correct version folder into ***%3ds max installation directory%/plugins***. \
 Versions must match!\
-Additionally plugin will require **Visual C++ Redistributable for Visual Studio 2015** to be installed in order to work.
+Additionally plugin will require **Visual C++ Redistributable for Visual Studio 2017** to be installed in order to work.
 
 ## License
 

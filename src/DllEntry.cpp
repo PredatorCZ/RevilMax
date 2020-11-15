@@ -19,6 +19,8 @@
 
 #include "RevilMax.h"
 #include "datas/master_printer.hpp"
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#define min(a,b) (((a) < (b)) ? (a) : (b))
 #include <gdiplus.h>
 
 #if VERSION_3DSMAX_B == VERSION_3DSMAX_E(2010)
@@ -31,7 +33,6 @@ extern ClassDesc2 *GetREEngineImportDesc();
 extern ClassDesc2 *GetMTFImportDesc();
 
 HINSTANCE hInstance;
-int controlsInit = FALSE;
 Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 ULONG_PTR gdiplusToken;
 
@@ -53,6 +54,15 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, ULONG fdwReason,
   return (TRUE);
 }
 
+static void PrintLog(const char *msg) {
+  if (!IsWindowVisible(the_listener_window) || IsIconic(the_listener_window))
+    show_listener();
+
+  mprintf(ToTSTRING(msg).c_str());
+  mflush();
+}
+
+extern "C" {
 // This function returns a string that describes the DLL and where the user
 // could purchase the DLL if they don't have it.
 __declspec(dllexport) const TCHAR *LibDescription() {
@@ -80,14 +90,6 @@ __declspec(dllexport) ClassDesc *LibClassDesc(int i) {
 // to catch obsolete DLLs.
 __declspec(dllexport) ULONG LibVersion() { return VERSION_3DSMAX; }
 
-void PrintLog(const char *msg) {
-  if (!IsWindowVisible(the_listener_window) || IsIconic(the_listener_window))
-    show_listener();
-
-  mprintf(ToTSTRING(msg).c_str());
-  mflush();
-}
-
 // This function is called once, right after your plugin has been loaded by 3ds
 // Max. Perform one-time plugin initialization in this method. Return TRUE if
 // you deem your plugin successfully loaded, or FALSE otherwise. If the function
@@ -106,11 +108,4 @@ __declspec(dllexport) int LibShutdown(void) {
   Gdiplus::GdiplusShutdown(gdiplusToken);
   return TRUE;
 }
-
-TCHAR *GetString(int id) {
-  static TCHAR buf[256];
-
-  if (hInstance)
-    return LoadString(hInstance, id, buf, _countof(buf)) ? buf : NULL;
-  return NULL;
 }

@@ -28,12 +28,15 @@
 #include <commdlg.h>
 #include <direct.h>
 #include <impexp.h>
+#undef min
+#undef max
+#include "project.h"
+#include "datas/reflector.hpp"
 
-#include "MAXex/win/CFGMacros.h"
+#include "datas/flags.hpp"
+
 #include <vector>
-#include "../project.h"
 
-extern TCHAR *GetString(int id);
 extern HINSTANCE hInstance;
 
 static constexpr int REVILMAX_VERSIONINT =
@@ -43,34 +46,26 @@ static const Matrix3 corMat = {{1.0f, 0.0f, 0.0f},
                                {0.0f, 0.0f, 1.0f},
                                {0.0f, -1.0f, 0.0f},
                                {0.0f, 0.0f, 0.0f}};
-class RevilMax {
+
+REFLECTOR_CREATE(Checked, ENUM, 2, CLASS, 8, RD_ANIALL, RD_ANISEL, CH_RESAMPLE,
+                 CH_ADDITIVE, CH_DISABLEIK, CH_NO_CACHE, CH_NOLOGBONES);
+
+REFLECTOR_CREATE(Visible, ENUM, 2, CLASS, 8, CB_MOTION);
+
+class RevilMax : public ReflectorInterface<RevilMax> {
 public:
   enum DLGTYPE_e { DLGTYPE_unknown, DLGTYPE_MOT, DLGTYPE_LMT };
+
+  es::Flags<Checked> checked;
+  es::Flags<Visible> visible;
+  float objectScale;
+  uint32 motionIndex, frameRateIndex;
 
   DLGTYPE_e instanceDialogType;
   HWND comboHandle;
   HWND hWnd;
-  TSTRING cfgpath;
-  const TCHAR *CFGFile;
   std::vector<TSTRING> motionNames;
   int windowSize, button1Distance, button2Distance;
-
-  enum ConfigBoolean {
-    IDConfigBool(IDC_RD_ANIALL),
-    IDConfigBool(IDC_RD_ANISEL),
-    IDConfigBool(IDC_CH_RESAMPLE),
-    IDConfigBool(IDC_CH_ADDITIVE),
-    IDConfigBool(IDC_CH_DISABLEIK),
-    IDConfigBool(IDC_CH_NO_CACHE),
-    IDConfigBool(IDC_CH_NOLOGBONES),
-    IDConfigVisible(IDC_CB_MOTION),
-  };
-
-  esFlags<uchar, ConfigBoolean> flags;
-
-  NewIDConfigValue(IDC_EDIT_SCALE);
-  NewIDConfigIndex(IDC_CB_MOTION);
-  NewIDConfigIndex(IDC_CB_FRAMERATE);
 
   void LoadCFG();
   void BuildCFG();

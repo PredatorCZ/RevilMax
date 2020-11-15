@@ -19,7 +19,10 @@
 
 #include "RevilMax.h"
 #include "datas/directory_scanner.hpp"
+#include "datas/reflector_xml.hpp"
 #include "resource.h"
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+#define min(a, b) (((a) < (b)) ? (a) : (b))
 #include <3dsmaxport.h>
 #include <IPathConfigMgr.h>
 #include <array>
@@ -29,7 +32,8 @@
 extern HINSTANCE hInstance;
 
 const TCHAR _name[] = _T("Revil Tool");
-const TCHAR _info[] = _T("\n" RevilMax_COPYRIGHT "Lukas Cone\nVersion " RevilMax_VERSION);
+const TCHAR _info[] =
+    _T("\n" RevilMax_COPYRIGHT "Lukas Cone\nVersion " RevilMax_VERSION);
 const TCHAR _license[] =
     _T("Revil Tool uses RevilLib, Copyright(C) 2017-2020 Lukas Cone.");
 const TCHAR _homePage[] =
@@ -38,47 +42,44 @@ const TCHAR _homePage[] =
 #include "MAXex/win/AboutDlg.h"
 
 RevilMax::RevilMax()
-    : CFGFile(nullptr), hWnd(nullptr), comboHandle(nullptr),
-      IDConfigValue(IDC_EDIT_SCALE)(1.0f), IDConfigIndex(IDC_CB_MOTION)(0),
-      IDConfigIndex(IDC_CB_FRAMERATE)(1),
-      flags(IDC_RD_ANISEL_checked, IDC_CB_MOTION_enabled) {}
+    : hWnd(nullptr), comboHandle(nullptr), objectScale(1.0f), motionIndex(),
+      frameRateIndex(1), checked(Checked::RD_ANISEL),
+      visible(Visible::CB_MOTION) {
+  RegisterReflectedTypes<Visible, Checked>();
+}
 
-void RevilMax::BuildCFG() {
-  cfgpath = IPathConfigMgr::GetPathConfigMgr()->GetDir(APP_PLUGCFG_DIR);
-  cfgpath.append(_T("\\RevilMaxSettings.ini"));
-  CFGFile = cfgpath.c_str();
+REFLECTOR_CREATE(RevilMax, 1, VARNAMES, objectScale, motionIndex,
+                 frameRateIndex, checked, visible);
+
+static auto GetConfig() {
+  TSTRING cfgpath = IPathConfigMgr::GetPathConfigMgr()->GetDir(APP_PLUGCFG_DIR);
+  return cfgpath + _T("/RevilMaxSettings.xml");
 }
 
 void RevilMax::LoadCFG() {
-  BuildCFG();
-  TCHAR buffer[CFGBufferSize];
+  pugi::xml_document doc;
+  auto conf = GetConfig();
+  if (doc.load_file(conf.data())) {
+    ReflectorWrap<RevilMax> rWrap(this);
+    ReflectorXMLUtil::Load(rWrap, doc);
+  }
 
-  GetCFGValue(IDC_EDIT_SCALE);
-  GetCFGIndex(IDC_CB_MOTION);
-  GetCFGIndex(IDC_CB_FRAMERATE);
-  GetCFGChecked(IDC_RD_ANISEL);
-  GetCFGChecked(IDC_RD_ANIALL);
-  GetCFGChecked(IDC_CH_RESAMPLE);
-  GetCFGChecked(IDC_CH_ADDITIVE);
-  GetCFGChecked(IDC_CH_NO_CACHE);
-  GetCFGChecked(IDC_CH_NOLOGBONES);
-  GetCFGEnabled(IDC_CB_MOTION);
+  CheckDlgButton(hWnd, IDC_CH_ADDITIVE, checked[Checked::CH_ADDITIVE]);
+  CheckDlgButton(hWnd, IDC_CH_DISABLEIK, checked[Checked::CH_DISABLEIK]);
+  CheckDlgButton(hWnd, IDC_CH_NO_CACHE, checked[Checked::CH_NO_CACHE]);
+  CheckDlgButton(hWnd, IDC_CH_NOLOGBONES, checked[Checked::CH_NOLOGBONES]);
+  CheckDlgButton(hWnd, IDC_CH_RESAMPLE, checked[Checked::CH_RESAMPLE]);
+  CheckDlgButton(hWnd, IDC_RD_ANIALL, checked[Checked::RD_ANIALL]);
+  CheckDlgButton(hWnd, IDC_RD_ANISEL, checked[Checked::RD_ANISEL]);
+  EnableWindow(comboHandle, visible[Visible::CB_MOTION]);
 }
 
 void RevilMax::SaveCFG() {
-  BuildCFG();
-  TCHAR buffer[CFGBufferSize];
-
-  SetCFGIndex(IDC_CB_MOTION);
-  SetCFGValue(IDC_EDIT_SCALE);
-  SetCFGIndex(IDC_CB_FRAMERATE);
-  SetCFGChecked(IDC_RD_ANISEL);
-  SetCFGChecked(IDC_RD_ANIALL);
-  SetCFGChecked(IDC_CH_RESAMPLE);
-  SetCFGChecked(IDC_CH_ADDITIVE);
-  SetCFGChecked(IDC_CH_NO_CACHE);
-  SetCFGChecked(IDC_CH_NOLOGBONES);
-  SetCFGEnabled(IDC_CB_MOTION);
+  pugi::xml_document doc;
+  ReflectorWrapConst<RevilMax> rWrap(this);
+  ReflectorXMLUtil::Save(rWrap, doc);
+  auto conf = GetConfig();
+  doc.save_file(conf.data());
 }
 
 static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
@@ -94,7 +95,7 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
     imp->comboHandle = GetDlgItem(hWnd, IDC_CB_MOTION);
     imp->LoadCFG();
     SetupIntSpinner(hWnd, IDC_SPIN_SCALE, IDC_EDIT_SCALE, 0, 5000,
-                    imp->IDC_EDIT_SCALE_value);
+                    imp->objectScale);
     SetWindowText(hWnd, _T("Revil Motion Import v" RevilMax_VERSION));
 
     if (imp->instanceDialogType == RevilMax::DLGTYPE_LMT) {
@@ -102,7 +103,7 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
       EnableWindow(fpsHandle, true);
       SendMessage(fpsHandle, CB_ADDSTRING, 0, (LPARAM) _T("30"));
       SendMessage(fpsHandle, CB_ADDSTRING, 0, (LPARAM) _T("60"));
-      SendMessage(fpsHandle, CB_SETCURSEL, imp->IDC_CB_FRAMERATE_index, 0);
+      SendMessage(fpsHandle, CB_SETCURSEL, imp->frameRateIndex, 0);
       EnableWindow(GetDlgItem(hWnd, IDC_CH_DISABLEIK), true);
     }
 
@@ -128,13 +129,12 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
       for (auto &p : imp->motionNames)
         SendMessage(imp->comboHandle, CB_ADDSTRING, 0, (LPARAM)p.c_str());
 
-      if (imp->IDC_CB_MOTION_index >= imp->motionNames.size())
-        imp->IDC_CB_MOTION_index = 0;
+      if (imp->motionIndex >= imp->motionNames.size())
+        imp->motionIndex = 0;
 
-      SendMessage(imp->comboHandle, CB_SETCURSEL, imp->IDC_CB_MOTION_index, 0);
+      SendMessage(imp->comboHandle, CB_SETCURSEL, imp->motionIndex, 0);
 
-      EnableWindow(imp->comboHandle,
-                   imp->flags[RevilMax::IDC_RD_ANISEL_checked]);
+      EnableWindow(imp->comboHandle, imp->visible[Visible::CB_MOTION]);
     }
 
     return TRUE;
@@ -201,36 +201,50 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
       imp->SaveCFG();
       return 1;
 
-      MSGCheckbox(IDC_CH_RESAMPLE);
+    case IDC_CH_RESAMPLE:
+      imp->checked.Set(Checked::CH_RESAMPLE,
+                       IsDlgButtonChecked(hWnd, IDC_CH_RESAMPLE) != 0);
       break;
 
-      MSGCheckbox(IDC_CH_ADDITIVE);
+    case IDC_CH_ADDITIVE:
+      imp->checked.Set(Checked::CH_ADDITIVE,
+                       IsDlgButtonChecked(hWnd, IDC_CH_ADDITIVE) != 0);
       break;
 
-      MSGCheckbox(IDC_CH_NO_CACHE);
+    case IDC_CH_NO_CACHE:
+      imp->checked.Set(Checked::CH_NO_CACHE,
+                       IsDlgButtonChecked(hWnd, IDC_CH_NO_CACHE) != 0);
       break;
 
-      MSGCheckbox(IDC_CH_NOLOGBONES);
+    case IDC_CH_NOLOGBONES:
+      imp->checked.Set(Checked::CH_NOLOGBONES,
+                       IsDlgButtonChecked(hWnd, IDC_CH_NOLOGBONES) != 0);
       break;
 
-      MSGCheckbox(IDC_CH_DISABLEIK);
+    case IDC_CH_DISABLEIK:
+      imp->checked.Set(Checked::CH_DISABLEIK,
+                       IsDlgButtonChecked(hWnd, IDC_CH_DISABLEIK) != 0);
       break;
 
-      MSGCheckbox(IDC_RD_ANIALL);
-      imp->flags -= RevilMax::IDC_RD_ANISEL_checked;
-      MSGEnable(IDC_RD_ANISEL, IDC_CB_MOTION);
+    case IDC_RD_ANIALL:
+      imp->checked += Checked::RD_ANIALL;
+      imp->checked -= Checked::RD_ANISEL;
+      imp->visible -= Visible::CB_MOTION;
+      EnableWindow(imp->comboHandle, false);
       break;
 
-      MSGCheckbox(IDC_RD_ANISEL);
-      imp->flags -= RevilMax::IDC_RD_ANIALL_checked;
-      MSGEnable(IDC_RD_ANISEL, IDC_CB_MOTION);
+    case IDC_RD_ANISEL:
+      imp->checked -= Checked::RD_ANIALL;
+      imp->checked += Checked::RD_ANISEL;
+      imp->visible += Visible::CB_MOTION;
+      EnableWindow(imp->comboHandle, true);
       break;
 
     case IDC_CB_MOTION: {
       switch (HIWORD(wParam)) {
       case CBN_SELCHANGE: {
         const LRESULT curSel = SendMessage((HWND)lParam, CB_GETCURSEL, 0, 0);
-        imp->IDC_CB_MOTION_index = curSel;
+        imp->motionIndex = curSel;
         return TRUE;
       } break;
       }
@@ -240,7 +254,7 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
       switch (HIWORD(wParam)) {
       case CBN_SELCHANGE: {
         const LRESULT curSel = SendMessage((HWND)lParam, CB_GETCURSEL, 0, 0);
-        imp->IDC_CB_FRAMERATE_index = curSel;
+        imp->frameRateIndex = curSel;
         return TRUE;
       } break;
       }
@@ -251,8 +265,7 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
   case CC_SPINNER_CHANGE:
     switch (LOWORD(wParam)) {
     case IDC_SPIN_SCALE:
-      imp->IDC_EDIT_SCALE_value =
-          reinterpret_cast<ISpinnerControl *>(lParam)->GetFVal();
+      imp->objectScale = reinterpret_cast<ISpinnerControl *>(lParam)->GetFVal();
       break;
     }
   }

@@ -1,3 +1,8 @@
+v1.6
+- Stability fixes.
+- New config format (moved to XML).
+- Message boxes no longer shows, when suppressing prompts.
+
 v1.5
 - Removed 32bit support.
 - Added support for 2021.
