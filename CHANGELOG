@@ -1,3 +1,6 @@
+v1.6.2
+- Fixed crash, when loading some LMT files.
+
 v1.6
 - Stability fixes.
 - New config format (moved to XML).
