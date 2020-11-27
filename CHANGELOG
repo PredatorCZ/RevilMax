@@ -1,3 +1,6 @@
+v1.6.3
+- Fixed crash due to buffer misalignment.
+
 v1.6.2
 - Fixed crash, when loading some LMT files.
 
