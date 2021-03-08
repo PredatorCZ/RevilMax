@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.3)
 
-project(RevilMax VERSION 1.6.3)
+project(RevilMax VERSION 1.7)
 
 set (RevilLibLibraryPath ../RevilLib)
 

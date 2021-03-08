@@ -1,5 +1,5 @@
 /*  Revil Tool for 3ds Max
-    Copyright(C) 2019-2020 Lukas Cone
+    Copyright(C) 2019-2021 Lukas Cone
 
     This program is free software : you can redistribute it and / or modify
     it under the terms of the GNU General Public License as published by
@@ -117,6 +117,56 @@ unsigned int REEngineImport::Version() { return REVILMAX_VERSIONINT; }
 
 void REEngineImport::ShowAbout(HWND hWnd) { ShowAboutDLG(hWnd); }
 
+static class : public ITreeEnumProc {
+public:
+  const MSTR boneNameHint = _T("BoneHash");
+
+  std::vector<INode *> bones;
+
+  void RescanBones() {
+    bones.clear();
+    GetCOREInterface7()->GetScene()->EnumTree(this);
+  }
+
+  void LockPose(TimeValue atTime) {
+    for (auto &b : bones) {
+      Matrix3 pMat = b->GetParentTM(atTime);
+      pMat.Invert();
+      Matrix3 mtx = b->GetNodeTM(atTime) * pMat;
+      SetXFormPacket packet(mtx);
+      AnimateOn();
+      b->GetTMController()->SetValue(atTime, &packet);
+      AnimateOff();
+    }
+  }
+
+  void ResetScene() {
+    SuspendAnimate();
+
+    for (auto &n : bones) {
+      Matrix3 pMat = n->GetParentTM(-1);
+      pMat.Invert();
+      Matrix3 mtx = n->GetNodeTM(-1) * pMat;
+      SetXFormPacket packet(mtx);
+      Control *cnt = n->GetTMController();
+      cnt->GetScaleController()->DeleteKeys(TRACK_DOALL | TRACK_RIGHTTOLEFT);
+      cnt->GetRotationController()->DeleteKeys(TRACK_DOALL | TRACK_RIGHTTOLEFT);
+      cnt->GetPositionController()->DeleteKeys(TRACK_DOALL | TRACK_RIGHTTOLEFT);
+      AnimateOn();
+      n->GetTMController()->SetValue(-1, &packet);
+      AnimateOff();
+    }
+  }
+
+  int callback(INode *node) {
+    if (node->UserPropExists(boneNameHint)) {
+      bones.push_back(node);
+    }
+
+    return TREE_CONTINUE;
+  }
+} REBoneScanner;
+
 void REEngineImport::LoadSkeleton(const uni::Skeleton *skel,
                                   TimeValue startTime) {
   for (auto &b : *skel) {
@@ -144,7 +194,7 @@ void REEngineImport::LoadSkeleton(const uni::Skeleton *skel,
     Matrix3 nodeTM;
     nodeTM.SetRotate(
         reinterpret_cast<const Quat &>(boneTM.rotation.QConjugate()));
-    nodeTM.SetTranslate(
+    nodeTM.SetTrans(
         reinterpret_cast<const Point3 &>(boneTM.translation * objectScale));
 
     auto parentBone = b->Parent();
@@ -184,7 +234,8 @@ void REEngineImport::LoadSkeleton(const uni::Skeleton *skel,
     node->GetTMController()->SetValue(-1, &packet);
     AnimateOff();
 
-    node->SetUserPropString(_T("BoneHash"), ToTSTRING(b->Index()).c_str());
+    node->SetUserPropString(REBoneScanner.boneNameHint,
+                            ToTSTRING(b->Index()).data());
     nodes[b->Index()] = node;
   }
 }
@@ -261,7 +312,7 @@ TimeValue REEngineImport::LoadMotion(const uni::Motion *mot,
       for (int i = 0; i < numFrames; i++) {
         Vector4A16 cVal;
         v->GetValue(cVal, frameTimes[i]);
-        Quat kVal = reinterpret_cast<Quat &>(cVal).Conjugate();
+        Quat kVal = reinterpret_cast<Quat &>(cVal.QConjugate());
 
         if (node->GetParentNode()->IsRootNode()) {
           Matrix3 cMat;
@@ -334,7 +385,7 @@ void REEngineImport::DoImport(const std::string &fileName,
   uni::List<uni::Skeleton> *skelList =
       dynamic_cast<decltype(skelList)>(areCache.asset.get());
   uni::Element<const uni::Motion> cMotion;
-  auto skel = skelList->Size() == 1 ? skelList->At(0) : nullptr;
+  auto skel = motionList->Size() > skelList->Size() ? skelList->At(0) : nullptr;
 
   if (motionList && motionList->Size()) {
     for (auto &m : *motionList) {
@@ -362,7 +413,7 @@ void REEngineImport::DoImport(const std::string &fileName,
 
       for (auto &m : *motionList) {
         if (skelList->Size()) {
-          auto _skel = skel ? std::move(skel) : skelList->At(i);
+          auto _skel = skel ? decltype(skel){skel.get(), false} : skelList->At(i);
 
           LoadSkeleton(_skel.get(), lastTime);
         }
@@ -372,6 +423,8 @@ void REEngineImport::DoImport(const std::string &fileName,
                 << nextTime >>
             1;
         lastTime = nextTime;
+        REBoneScanner.RescanBones();
+        REBoneScanner.LockPose(lastTime - GetTicksPerFrame());
         i++;
       }
 
@@ -391,6 +444,9 @@ void REEngineImport::DoImport(const std::string &fileName,
   if (skel) {
     LoadSkeleton(skel.get());
   }
+
+  REBoneScanner.RescanBones();
+  REBoneScanner.ResetScene();
 
   LoadMotion(cMotion.get());
 }

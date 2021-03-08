@@ -1,3 +1,9 @@
+v1.7
+- Fixed RE glitchy rotations #14
+- Fixed RE wandering bones #11
+- Fixed RE indetity rotations for pose bones
+- Fixed RE3 subscript exceptions when loading all
+
 v1.6.3
 - Fixed crash due to buffer misalignment.
 
