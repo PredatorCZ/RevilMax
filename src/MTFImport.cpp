@@ -20,7 +20,8 @@
 #include "datas/except.hpp"
 #include "datas/master_printer.hpp"
 #include "datas/reflector.hpp"
-#include "lmt.hpp"
+#include "datas/vectors_simd.hpp"
+#include "revil/lmt.hpp"
 #include <algorithm>
 #include <iiksys.h>
 #include <iksolver.h>
@@ -63,6 +64,7 @@ public:
   virtual const TCHAR *Category() { return NULL; }
   virtual const TCHAR *InternalName() { return _className; }
   virtual HINSTANCE HInstance() { return hInstance; }
+  const TCHAR *NonLocalizedClassName() { return _className; }
 } MTFImportDesc;
 
 ClassDesc2 *GetMTFImportDesc() { return &MTFImportDesc; }
@@ -664,7 +666,7 @@ TimeValue MTFImport::LoadMotion(const uni::Motion &mot, TimeValue startTime) {
 
 void SwapLocale();
 static struct {
-  LMT asset;
+  revil::LMT asset;
   std::string filename;
 } lmtCache;
 
@@ -676,8 +678,9 @@ void MTFImport::DoImport(const std::string &fileName, bool suppressPrompts) {
   }
 
   size_t curMotionID = 0;
+  uni::MotionsConst motions = lmtCache.asset;
 
-  for (auto &m : lmtCache.asset) {
+  for (auto &m : *motions) {
     if (m) {
       motionNames.push_back(ToTSTRING(curMotionID));
     } else {
@@ -707,7 +710,7 @@ void MTFImport::DoImport(const std::string &fileName, bool suppressPrompts) {
   }
 
   if (checked[Checked::RD_ANISEL]) {
-    auto mot = lmtCache.asset.At(motionIndex);
+    auto mot = motions->At(motionIndex);
 
     if (!mot) {
       return;
@@ -721,7 +724,7 @@ void MTFImport::DoImport(const std::string &fileName, bool suppressPrompts) {
 
     printline("Sequencer not found, dumping animation ranges (in tick units):");
 
-    for (auto &a : lmtCache.asset) {
+    for (auto &a : *motions) {
 
       if (!a) {
         i++;
@@ -733,7 +736,7 @@ void MTFImport::DoImport(const std::string &fileName, bool suppressPrompts) {
       TimeValue nextTime = LoadMotion(*a.get(), lastTime);
       printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
               << nextTime;
-      const auto &_a = static_cast<const LMTAnimation &>(*a.get());
+      const auto &_a = static_cast<const revil::LMTAnimation &>(*a.get());
 
       if (_a.LoopFrame() > 0)
         printer << ", loopFrame: "

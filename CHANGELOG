@@ -1,3 +1,8 @@
+v1.8
+- Added support for motlist486, mot458 formats.
+- Added support for 2022.
+- Added Iceborne LMT support.
+
 v1.7
 - Fixed RE glitchy rotations #14
 - Fixed RE wandering bones #11

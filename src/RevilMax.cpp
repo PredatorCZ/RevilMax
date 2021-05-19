@@ -76,7 +76,7 @@ void RevilMax::LoadCFG() {
 
 void RevilMax::SaveCFG() {
   pugi::xml_document doc;
-  ReflectorWrapConst<RevilMax> rWrap(this);
+  ReflectorWrap<RevilMax> rWrap(this);
   ReflectorXMLUtil::Save(rWrap, doc);
   auto conf = GetConfig();
   doc.save_file(conf.data());

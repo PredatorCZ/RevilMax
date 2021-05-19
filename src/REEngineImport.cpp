@@ -21,8 +21,9 @@
 #include "datas/except.hpp"
 #include "datas/master_printer.hpp"
 #include "datas/tchar.hpp"
-#include "re_asset.hpp"
+#include "revil/re_asset.hpp"
 #include "uni/motion.hpp"
+#include "uni/rts.hpp"
 #include "uni/skeleton.hpp"
 #include <memory>
 #include <unordered_map>
@@ -65,6 +66,7 @@ public:
   virtual const TCHAR *Category() { return NULL; }
   virtual const TCHAR *InternalName() { return _className; }
   virtual HINSTANCE HInstance() { return hInstance; }
+  const TCHAR *NonLocalizedClassName() { return _className; }
 } REEngineImportDesc;
 
 ClassDesc2 *GetREEngineImportDesc() { return &REEngineImportDesc; }
@@ -72,7 +74,7 @@ ClassDesc2 *GetREEngineImportDesc() { return &REEngineImportDesc; }
 //--- HavokImp -------------------------------------------------------
 REEngineImport::REEngineImport() {}
 
-int REEngineImport::ExtCount() { return 8; }
+int REEngineImport::ExtCount() { return 10; }
 
 const TCHAR *REEngineImport::Ext(int n) {
   switch (n) {
@@ -92,6 +94,10 @@ const TCHAR *REEngineImport::Ext(int n) {
     return _T("motlist.60");
   case 7:
     return _T("mot.43");
+  case 8:
+    return _T("motlist.486");
+  case 9:
+    return _T("mot.458");
   default:
     return nullptr;
   }
@@ -368,22 +374,19 @@ void SwapLocale() {
 }
 
 static struct {
-  REAsset::Ptr asset;
+  revil::REAsset asset;
   std::string filename;
 } areCache;
 
 void REEngineImport::DoImport(const std::string &fileName,
                               bool suppressPrompts) {
   if (areCache.filename != fileName) {
-    es::Dispose(areCache.asset);
-    areCache.asset = REAsset::Load(fileName);
+    areCache.asset.Load(fileName);
     areCache.filename = fileName;
   }
 
-  uni::List<uni::Motion> *motionList =
-      dynamic_cast<decltype(motionList)>(areCache.asset.get());
-  uni::List<uni::Skeleton> *skelList =
-      dynamic_cast<decltype(skelList)>(areCache.asset.get());
+  auto motionList = areCache.asset.As<uni::MotionsConst>();
+  auto skelList = areCache.asset.As<uni::SkeletonsConst>();
   uni::Element<const uni::Motion> cMotion;
   auto skel = motionList->Size() > skelList->Size() ? skelList->At(0) : nullptr;
 
@@ -413,7 +416,8 @@ void REEngineImport::DoImport(const std::string &fileName,
 
       for (auto &m : *motionList) {
         if (skelList->Size()) {
-          auto _skel = skel ? decltype(skel){skel.get(), false} : skelList->At(i);
+          auto _skel =
+              skel ? decltype(skel){skel.get(), false} : skelList->At(i);
 
           LoadSkeleton(_skel.get(), lastTime);
         }
@@ -433,8 +437,7 @@ void REEngineImport::DoImport(const std::string &fileName,
   }
 
   if (!cMotion) {
-    cMotion = std::move(decltype(cMotion){
-        dynamic_cast<const uni::Motion *>(areCache.asset.get()), false});
+    cMotion = areCache.asset.As<uni::Element<const uni::Motion>>();
   }
 
   if (!cMotion) {
