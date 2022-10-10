@@ -96,7 +96,7 @@ static INT_PTR CALLBACK DialogCallbacks(HWND hWnd, UINT message, WPARAM wParam,
     imp->LoadCFG();
     SetupIntSpinner(hWnd, IDC_SPIN_SCALE, IDC_EDIT_SCALE, 0, 5000,
                     imp->objectScale);
-    SetWindowText(hWnd, _T("Revil Motion Import v" RevilMax_VERSION));
+    SetWindowText(hWnd, _T("Revil Motion Import v" RevilMax_VERSION " (2017a Oct 8 2022)"));
 
     if (imp->instanceDialogType == RevilMax::DLGTYPE_LMT) {
       HWND fpsHandle = GetDlgItem(hWnd, IDC_CB_FRAMERATE);

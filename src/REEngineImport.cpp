@@ -74,7 +74,7 @@ ClassDesc2 *GetREEngineImportDesc() { return &REEngineImportDesc; }
 //--- HavokImp -------------------------------------------------------
 REEngineImport::REEngineImport() {}
 
-int REEngineImport::ExtCount() { return 10; }
+int REEngineImport::ExtCount() { return 18; }
 
 const TCHAR *REEngineImport::Ext(int n) {
   switch (n) {
@@ -98,6 +98,22 @@ const TCHAR *REEngineImport::Ext(int n) {
     return _T("motlist.486");
   case 9:
     return _T("mot.458");
+  case 10:
+	  return _T("motlist.484"); //MHRise
+  case 11:
+	  return _T("mot.456");
+  case 12:
+	  return _T("motlist.524"); //RE2,3 RT
+  case 13:
+	  return _T("mot.492");
+  case 14:
+	  return _T("motlist.528"); //MHRise Sunbreak
+  case 15:
+	  return _T("mot.492");
+  case 16:
+	  return _T("motlist.653"); //MHRise Sunbreak
+  case 17:
+	  return _T("mot.603");
   default:
     return nullptr;
   }
@@ -225,9 +241,9 @@ void REEngineImport::LoadSkeleton(const uni::Skeleton *skel,
           CTRL_POSITION_CLASS_ID, Class_ID(LININTERP_POSITION_CLASS_ID, 0)));
 
     if (cnt->GetRotationController()->ClassID() !=
-        Class_ID(LININTERP_ROTATION_CLASS_ID, 0))
+        Class_ID(EULER_CONTROL_CLASS_ID, 0))
       cnt->SetRotationController((Control *)CreateInstance(
-          CTRL_ROTATION_CLASS_ID, Class_ID(LININTERP_ROTATION_CLASS_ID, 0)));
+          CTRL_ROTATION_CLASS_ID, Class_ID(EULER_CONTROL_CLASS_ID, 0)));
 
     if (cnt->GetScaleController()->ClassID() !=
         Class_ID(LININTERP_SCALE_CLASS_ID, 0))
@@ -253,8 +269,8 @@ TimeValue REEngineImport::LoadMotion(const uni::Motion *mot,
   }
 
   const float aDuration = mot->Duration();
-  TimeValue numTicks = SecToTicks(aDuration);
   const TimeValue ticksPerFrame = GetTicksPerFrame();
+  TimeValue numTicks = SecToTicks(aDuration) + ticksPerFrame;
   TimeValue overlappingTicks = numTicks % ticksPerFrame;
 
   if (overlappingTicks > (ticksPerFrame / 2)) {
@@ -316,6 +332,8 @@ TimeValue REEngineImport::LoadMotion(const uni::Motion *mot,
       AnimateOn();
 
       for (int i = 0; i < numFrames; i++) {
+		if (i % 3 != 0) 
+		  continue;
         Vector4A16 cVal;
         v->GetValue(cVal, frameTimes[i]);
         Quat kVal = reinterpret_cast<Quat &>(cVal.QConjugate());
@@ -391,9 +409,11 @@ void REEngineImport::DoImport(const std::string &fileName,
   auto skel = motionList->Size() > skelList->Size() ? skelList->At(0) : nullptr;
 
   if (motionList && motionList->Size()) {
-    for (auto &m : *motionList) {
-      motionNames.emplace_back(ToTSTRING(m->Name()));
-    }
+	int i = 0;
+	for (auto &m : *motionList) {
+		motionNames.emplace_back(ToTSTRING(std::to_string(i) + ". " + m->Name()));
+		i++;
+	}
 
     if (!suppressPrompts) {
       if (!SpawnDialog()) {
