@@ -1,3 +1,9 @@
+v1.9
+- Merged with alphazolam's changes:
+  - Added support for MHRise, SF6 and Ray Traces RE titles
+- Synced to new RevilLib version
+- Dropped support for 2010 - 2012 versions
+
 v1.8.1
 - RE visual fixes
 

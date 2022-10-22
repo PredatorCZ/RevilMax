@@ -18,7 +18,7 @@
 */
 
 #pragma once
-#include "MAXex/3DSMaxSDKCompat.h"
+#include "3DSMaxSDKCompat.h"
 #include <iparamb2.h>
 #include <iparamm2.h>
 #include <istdplug.h>
@@ -30,10 +30,10 @@
 #include <impexp.h>
 #undef min
 #undef max
-#include "project.h"
-#include "datas/reflector.hpp"
-
 #include "datas/flags.hpp"
+#include "datas/reflector.hpp"
+#include "datas/tchar.hpp"
+#include "project.h"
 
 #include <vector>
 
@@ -47,12 +47,15 @@ static const Matrix3 corMat = {{1.0f, 0.0f, 0.0f},
                                {0.0f, -1.0f, 0.0f},
                                {0.0f, 0.0f, 0.0f}};
 
-REFLECTOR_CREATE(Checked, ENUM, 2, CLASS, 8, RD_ANIALL, RD_ANISEL, CH_RESAMPLE,
-                 CH_ADDITIVE, CH_DISABLEIK, CH_NO_CACHE, CH_NOLOGBONES);
+MAKE_ENUM(ENUMSCOPE(class Checked
+                    : uint8, Checked),
+          EMEMBER(RD_ANIALL), EMEMBER(RD_ANISEL), EMEMBER(CH_RESAMPLE),
+          EMEMBER(CH_ADDITIVE), EMEMBER(CH_DISABLEIK), EMEMBER(CH_NO_CACHE),
+          EMEMBER(CH_NOLOGBONES));
 
-REFLECTOR_CREATE(Visible, ENUM, 2, CLASS, 8, CB_MOTION);
+MAKE_ENUM(ENUMSCOPE(class Visible : uint8, Visible), EMEMBER(CB_MOTION));
 
-class RevilMax : public ReflectorInterface<RevilMax> {
+class RevilMax {
 public:
   enum DLGTYPE_e { DLGTYPE_unknown, DLGTYPE_MOT, DLGTYPE_LMT };
 

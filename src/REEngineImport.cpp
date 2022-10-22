@@ -25,6 +25,7 @@
 #include "uni/motion.hpp"
 #include "uni/rts.hpp"
 #include "uni/skeleton.hpp"
+#include <array>
 #include <memory>
 #include <unordered_map>
 
@@ -74,48 +75,33 @@ ClassDesc2 *GetREEngineImportDesc() { return &REEngineImportDesc; }
 //--- HavokImp -------------------------------------------------------
 REEngineImport::REEngineImport() {}
 
+static const std::array<const TCHAR *, 18> extensions{
+    /**/ //
+    _T("motlist.85"),
+    _T("motlist"),
+    _T("mot.65"),
+    _T("mot"),
+    _T("motlist.99"),
+    _T("mot.78"),
+    _T("motlist.60"),
+    _T("mot.43"),
+    _T("motlist.486"),
+    _T("mot.458"),
+    _T("motlist.484"), // MHRise
+    _T("mot.456"),
+    _T("motlist.524"), // RE2,3 RT
+    _T("mot.492"),
+    _T("motlist.528"), // MHRise Sunbreak
+    _T("mot.492"),
+    _T("motlist.653"), // MHRise Sunbreak
+    _T("mot.603"),
+};
+
 int REEngineImport::ExtCount() { return 18; }
 
 const TCHAR *REEngineImport::Ext(int n) {
-  switch (n) {
-  case 0:
-    return _T("motlist.85");
-  case 1:
-    return _T("motlist");
-  case 2:
-    return _T("mot.65");
-  case 3:
-    return _T("mot");
-  case 4:
-    return _T("motlist.99");
-  case 5:
-    return _T("mot.78");
-  case 6:
-    return _T("motlist.60");
-  case 7:
-    return _T("mot.43");
-  case 8:
-    return _T("motlist.486");
-  case 9:
-    return _T("mot.458");
-  case 10:
-	  return _T("motlist.484"); //MHRise
-  case 11:
-	  return _T("mot.456");
-  case 12:
-	  return _T("motlist.524"); //RE2,3 RT
-  case 13:
-	  return _T("mot.492");
-  case 14:
-	  return _T("motlist.528"); //MHRise Sunbreak
-  case 15:
-	  return _T("mot.492");
-  case 16:
-	  return _T("motlist.653"); //MHRise Sunbreak
-  case 17:
-	  return _T("mot.603");
-  default:
-    return nullptr;
+  if (n > -1 && n < extensions.size()) {
+    return extensions.at(n);
   }
 
   return nullptr;
@@ -444,9 +430,8 @@ void REEngineImport::DoImport(const std::string &fileName,
         }
 
         TimeValue nextTime = LoadMotion(m.get(), lastTime);
-        printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
-                << nextTime >>
-            1;
+        printline(std::to_string(motionNames[i])
+                  << ": " << lastTime << ", " << nextTime);
         lastTime = nextTime;
         REBoneScanner.RescanBones();
         REBoneScanner.LockPose(lastTime - GetTicksPerFrame());

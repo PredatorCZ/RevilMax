@@ -110,7 +110,7 @@ unsigned int MTFImport::Version() { return REVILMAX_VERSIONINT; }
 
 void MTFImport::ShowAbout(HWND hWnd) { ShowAboutDLG(hWnd); }
 
-struct LMTNode : ReflectorInterface<LMTNode> {
+struct LMTNode {
   union {
     struct {
       Vector r1, r2, r3, r4;
@@ -185,7 +185,8 @@ struct LMTNode : ReflectorInterface<LMTNode> {
   }
 };
 
-REFLECTOR_CREATE(LMTNode, 1, VARNAMES, LMTBone, r1, r2, r3, r4);
+REFLECT(CLASS(LMTNode), MEMBER(LMTBone), MEMBER(r1), MEMBER(r2), MEMBER(r3),
+        MEMBER(r4));
 
 static class : public ITreeEnumProc {
 public:
@@ -734,15 +735,15 @@ void MTFImport::DoImport(const std::string &fileName, bool suppressPrompts) {
       a->FrameRate(frameRate);
 
       TimeValue nextTime = LoadMotion(*a.get(), lastTime);
-      printer << std::to_string(motionNames[i]) << ": " << lastTime << ", "
-              << nextTime;
+      es::print::Get() << std::to_string(motionNames[i]) << ": " << lastTime
+                       << ", " << nextTime;
       const auto &_a = static_cast<const revil::LMTAnimation &>(*a.get());
 
       if (_a.LoopFrame() > 0)
-        printer << ", loopFrame: "
-                << SecToTicks(_a.LoopFrame() / float(frameRate));
+        es::print::Get() << ", loopFrame: "
+                         << SecToTicks(_a.LoopFrame() / float(frameRate));
 
-      printer >> 1;
+      es::print::FlushAll();
       lastTime = nextTime;
       iBoneScanner.LockPose(nextTime - GetTicksPerFrame());
 

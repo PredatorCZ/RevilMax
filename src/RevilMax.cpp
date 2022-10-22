@@ -20,6 +20,7 @@
 #include "RevilMax.h"
 #include "datas/directory_scanner.hpp"
 #include "datas/reflector_xml.hpp"
+#include "pugixml.hpp"
 #include "resource.h"
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -39,7 +40,7 @@ const TCHAR _license[] =
 const TCHAR _homePage[] =
     _T("https://lukascone.wordpress.com/2019/05/02/revil-3ds-max-plugin/");
 
-#include "MAXex/win/AboutDlg.h"
+#include "win/AboutDlg.h"
 
 RevilMax::RevilMax()
     : hWnd(nullptr), comboHandle(nullptr), objectScale(1.0f), motionIndex(),
@@ -48,8 +49,8 @@ RevilMax::RevilMax()
   RegisterReflectedTypes<Visible, Checked>();
 }
 
-REFLECTOR_CREATE(RevilMax, 1, VARNAMES, objectScale, motionIndex,
-                 frameRateIndex, checked, visible);
+REFLECT(CLASS(RevilMax), MEMBER(objectScale), MEMBER(motionIndex),
+        MEMBER(frameRateIndex), MEMBER(checked), MEMBER(visible));
 
 static auto GetConfig() {
   TSTRING cfgpath = IPathConfigMgr::GetPathConfigMgr()->GetDir(APP_PLUGCFG_DIR);

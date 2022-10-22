@@ -96,7 +96,7 @@ __declspec(dllexport) ULONG LibVersion() { return VERSION_3DSMAX; }
 // returns FALSE, the system will NOT load the plugin, it will then call
 // FreeLibrary on your DLL, and send you a message.
 __declspec(dllexport) int LibInitialize(void) {
-  printer.AddPrinterFunction(PrintLog);
+  es::print::AddPrinterFunction(PrintLog);
   Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
   return TRUE;
 }
